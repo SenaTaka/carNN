@@ -2,6 +2,7 @@
 # Cコードの上書きはせず、コンパイル・実行・可視化のみを行う
 
 import subprocess, struct, os, math
+from datetime import datetime
 import matplotlib.pyplot as plt
 
 TRACK_FN = "track.txt"
@@ -210,6 +211,12 @@ def main():
     ax.set_xticks([]); ax.set_yticks([])
     ax.legend()
     plt.title("Evolution Result (Light Mode)", color='white')
+    
+    # 実行時間をファイル名にして保存
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_filename = f"{timestamp}.png"
+    plt.savefig(output_filename, facecolor='black', dpi=150)
+    print(f"Saved result to: {output_filename}")
     plt.show()
 
 if __name__=='__main__':
