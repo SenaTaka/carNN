@@ -163,50 +163,87 @@ def nn_forward_jit(weights, inputs, nin, nhid, nout):
     
     return output
 
+
 @jit(nopython=True, cache=True)
 def simulate_car_jit(weights, track, half_width, sensor_angles, 
                      sim_steps, dt, max_speed, max_steer, throttle_power, wheelbase):
-    """車両シミュレーション（JIT最適化）"""
+    """車両シミュレーション＋複合評価（進捗 + 速度 - 逆走ペナルティ）"""
     x, y = track[0, 0], track[0, 1]
     theta = math.atan2(track[1, 1] - y, track[1, 0] - x)
     v = 0.0
-    
+
     max_progress = 0.0
-    
+    last_progress = 0.0
+    wrong_dir_amount = 0.0  # 逆走量（進捗の後退分）
+    sum_forward_speed = 0.0
+    alive_steps = 0
+
     for step in range(sim_steps):
-        # センサー
+        # センサー読み取り
         sensor_readings = sense_jit(x, y, theta, track, half_width, 
                                     sensor_angles, MAX_SENSOR_DIST)
-        
+
         # NN入力
         nn_input = np.empty(NIN)
         for i in range(NSENS):
             nn_input[i] = sensor_readings[i]
         nn_input[NSENS] = v / max_speed
-        
+
         # NN出力
         outputs = nn_forward_jit(weights, nn_input, NIN, NHID, NOUT)
         steer = max(-1.0, min(1.0, outputs[0])) * max_steer
         throttle = max(-1.0, min(1.0, outputs[1]))
-        
+
         # 車両運動
         v += throttle * throttle_power * dt
         v = max(-1.0, min(max_speed, v))
         theta += (v * math.tan(steer) / wheelbase) * dt
         x += v * math.cos(theta) * dt
         y += v * math.sin(theta) * dt
-        
+
         # コースアウト判定
         dist_to_center = distance_to_track_jit(x, y, track)
         if dist_to_center > half_width:
             break
-        
-        # 進行度
+
+        # 進捗
         progress = compute_progress_jit(x, y, track)
-        if progress > max_progress:
-            max_progress = progress
-    
-    return max_progress
+
+        # 逆走判定（進捗の後退分をペナルティとして蓄積）
+        delta = progress - last_progress
+        if delta >= 0.0:
+            if progress > max_progress:
+                max_progress = progress
+        else:
+            wrong_dir_amount += -delta  # 後退した分だけ増やす
+
+        last_progress = progress
+
+        # 速度（前進成分のみ加算）
+        if v > 0.0:
+            sum_forward_speed += v
+
+        alive_steps += 1
+
+    # 平均速度を正規化
+    if alive_steps > 0:
+        avg_speed = sum_forward_speed / alive_steps
+    else:
+        avg_speed = 0.0
+
+    avg_speed_norm = avg_speed / max_speed  # 0〜1程度
+
+    # 重み（必要に応じて調整）
+    w_prog = 0.7
+    w_speed = 0.3
+    w_wrong = 2.0
+
+    fitness = w_prog * max_progress + w_speed * avg_speed_norm - w_wrong * wrong_dir_amount
+
+    if fitness < 0.0:
+        fitness = 0.0
+
+    return fitness
 
 # ==========================================
 # DEAP遺伝的アルゴリズム
@@ -289,7 +326,8 @@ def evolve_with_deap(track, half_width):
     best_fitness = best_individual.fitness.values[0]
     
     print("\n✅ Evolution complete!")
-    print(f"Best fitness: {best_fitness:.4f} ({best_fitness*100:.1f}% Lap)")
+    print(f"Best fitness: {best_fitness:.4f} (progress+speed-penalty)")
+
     
     return np.array(best_individual), pop
 
