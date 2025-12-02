@@ -7,6 +7,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
+from matplotlib.animation import FuncAnimation
 from deap import base, creator, tools, algorithms
 from multiprocessing import Pool, cpu_count
 import warnings
@@ -333,6 +334,101 @@ class Visualizer:
         self.ax_c.set_title(status, color='white')
         self.fig.canvas.draw(); self.fig.canvas.flush_events(); plt.pause(0.01)
 
+    def play_replay(self, best_weights, points_per_lap):
+        print("🎬 Generating Replay Animation...")
+        
+        # Simulation for Replay
+        x, y = self.track[0,0], self.track[0,1]
+        theta = math.atan2(self.track[5,1]-y, self.track[5,0]-x)
+        v = 0.0
+        traj = []
+        idx = 0; total_p = 0
+        gx1, gy1, gx2, gy2 = self.goal_line
+        
+        for _ in range(SIM_STEPS):
+            traj.append((x, y, theta))
+            
+            sensors = sense_jit(x, y, theta, self.track, self.half_width, SENSOR_ANGLES, MAX_SENSOR_DIST)
+            inp = np.zeros(len(sensors)+1); inp[:len(sensors)] = sensors; inp[-1] = v / MAX_SPEED
+            out = nn_forward_jit(best_weights, inp, len(inp), NHID, NOUT)
+            
+            steer = out[0] * MAX_STEER
+            throttle = out[1]
+            
+            if throttle > 0: v += throttle * THROTTLE_POWER * DT
+            else: v += throttle * THROTTLE_POWER * 2.0 * DT
+            v = max(-5.0, min(MAX_SPEED, v))
+            
+            theta += (v * math.tan(steer) / WHEELBASE) * DT
+            x += v * math.cos(theta) * DT
+            y += v * math.sin(theta) * DT
+            
+            if distance_to_track_jit(x, y, self.track) > self.half_width:
+                break
+                
+            cur = get_nearest_idx_jit(x, y, self.track, idx)
+            diff = cur - idx
+            n = len(self.track)
+            if diff < -n/2: diff += n
+            elif diff > n/2: diff -= n
+            if diff > 0: total_p += diff
+            idx = cur
+            
+            if total_p > points_per_lap * 0.95:
+                if is_intersect(traj[-1][0], traj[-1][1], x, y, gx1, gy1, gx2, gy2):
+                    traj.append((x, y, theta))
+                    break
+
+        # Setup Animation
+        self.ax_c.clear()
+        self.ax_c.set_aspect('equal'); self.ax_c.axis('off')
+        self.ax_c.add_patch(Polygon(self.poly_points, facecolor='#333333', edgecolor='none'))
+        self.ax_c.plot(self.border_in[:,0], self.border_in[:,1], color='white', lw=1)
+        self.ax_c.plot(self.border_out[:,0], self.border_out[:,1], color='white', lw=1)
+        self.ax_c.plot([gx1, gx2], [gy1, gy2], color='#ff0055', lw=3)
+        
+        # Car shape
+        car_poly = Polygon(np.array([[-1.5, -0.75], [1.5, -0.75], [1.5, 0.75], [-1.5, 0.75]]), color='cyan')
+        self.ax_c.add_patch(car_poly)
+        title = self.ax_c.set_title("Replay", color='white')
+        
+        def init():
+            return car_poly, title
+            
+        def update_frame(frame):
+            if frame >= len(traj): return car_poly, title
+            cx, cy, ctheta = traj[frame]
+            
+            # Create rotated rectangle
+            l, w = 3.0, 1.5
+            c, s = math.cos(ctheta), math.sin(ctheta)
+            pts = np.array([[-l/2, -w/2], [l/2, -w/2], [l/2, w/2], [-l/2, w/2]])
+            R = np.array([[c, -s], [s, c]])
+            pts = pts @ R.T
+            pts += np.array([cx, cy])
+            
+            car_poly.set_xy(pts)
+            title.set_text(f"Replay Frame {frame}/{len(traj)}")
+            return car_poly, title
+
+        ani = FuncAnimation(self.fig, update_frame, frames=len(traj), init_func=init, blit=True, interval=20)
+        
+        # Save Video
+        try:
+            print("💾 Saving animation to 'replay.mp4' (requires ffmpeg)...")
+            ani.save('replay.mp4', writer='ffmpeg', fps=30)
+            print("✅ Saved replay.mp4")
+        except Exception as e:
+            print(f"⚠️  FFmpeg not found or error. Trying GIF... ({e})")
+            try:
+                ani.save('replay.gif', writer='pillow', fps=30)
+                print("✅ Saved replay.gif")
+            except Exception as e2:
+                print(f"❌ Could not save animation: {e2}")
+        
+        print("📺 Showing replay...")
+        plt.show(block=True)
+
 def eval_wrapper(ind):
     w = np.array(ind)
     fit, _, _ = simulate_car_jit(w, TRACK, HALF_WIDTH, POINTS_PER_LAP, SENSOR_ANGLES, SIM_STEPS, DT, MAX_SPEED, MAX_STEER, THROTTLE_POWER, WHEELBASE, GOAL_LINE)
@@ -461,8 +557,11 @@ def main():
         
         # 可視化の最終更新
         viz.update(history, best_weights, POINTS_PER_LAP)
+        
+        # リプレイ動画の生成と再生
+        viz.play_replay(best_weights, POINTS_PER_LAP)
+        
         print("Done. Close window to exit.")
-        plt.show(block=True)
 
 if __name__ == "__main__":
     main()
