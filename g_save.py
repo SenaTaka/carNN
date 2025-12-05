@@ -14,7 +14,6 @@ import warnings
 import os
 import glob
 from datetime import datetime
-import sys
 
 warnings.filterwarnings('ignore')
 plt.ion()
@@ -577,7 +576,7 @@ if __name__ == "__main__":
     try:
         # Try to use 'fork' for better performance and compatibility with global state
         # This works on Linux and macOS (though macOS may raise warnings)
-        set_start_method('fork', force=False)
+        set_start_method('fork')
     except RuntimeError:
         # If start method is already set or 'fork' is not available, continue with default
         pass
