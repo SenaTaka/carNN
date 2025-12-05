@@ -9,11 +9,12 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.animation import FuncAnimation
 from deap import base, creator, tools, algorithms
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, set_start_method
 import warnings
 import os
 import glob
 from datetime import datetime
+import sys
 
 warnings.filterwarnings('ignore')
 plt.ion()
@@ -430,6 +431,10 @@ class Visualizer:
         plt.show(block=True)
 
 def eval_wrapper(ind):
+    """
+    Wrapper function for evaluating an individual in the genetic algorithm.
+    This function is called by multiprocessing Pool, so it needs to be at module level.
+    """
     w = np.array(ind)
     fit, _, _ = simulate_car_jit(w, TRACK, HALF_WIDTH, POINTS_PER_LAP, SENSOR_ANGLES, SIM_STEPS, DT, MAX_SPEED, MAX_STEER, THROTTLE_POWER, WHEELBASE, GOAL_LINE)
     return fit,
@@ -489,6 +494,8 @@ def main():
     toolbox.register("mate", tools.cxBlend, alpha=0.5)
     toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=0.25, indpb=0.2)
     toolbox.register("select", tools.selTournament, tournsize=4)
+    
+    # Create multiprocessing Pool (works on both macOS and Linux)
     pool = Pool(cpu_count())
     toolbox.register("map", pool.map)
     
@@ -564,4 +571,19 @@ def main():
         print("Done. Close window to exit.")
 
 if __name__ == "__main__":
+    # Set multiprocessing start method for macOS compatibility
+    # On macOS (since Python 3.8), the default is 'spawn' which requires special handling
+    # Using 'fork' when available provides better compatibility with global variables
+    try:
+        # Try to use 'fork' for better performance and compatibility with global state
+        # This works on Linux and macOS (though macOS may raise warnings)
+        set_start_method('fork', force=False)
+    except RuntimeError:
+        # If start method is already set or 'fork' is not available, continue with default
+        pass
+    except ValueError:
+        # 'fork' might not be available on all platforms (e.g., Windows)
+        # In that case, use the default method for the platform
+        pass
+    
     main()
