@@ -24,8 +24,11 @@ carNN/
 ├── track_editor.html            # Web UIトラックエディタ（NEW!）
 ├── track_loader.py              # トラックJSONローダー（NEW!）
 ├── TRACK_EDITOR_GUIDE.md        # トラックエディタガイド（NEW!）
+├── USAGE_EXAMPLE.md             # 使用例とワークフローガイド（NEW!）
+├── requirements.txt             # 必要なライブラリのリスト
 ├── best_weights_*.npy           # 学習済み重みファイル
-├── *.json                       # カスタムトラックファイル
+├── sample_track.json            # サンプルトラック（複雑なコース）
+├── example_simple_oval.json     # サンプルトラック（シンプルな楕円）
 ├── README.md                    # このファイル
 └── *.png                        # 実行結果の可視化画像
 ```
@@ -52,8 +55,18 @@ carNN/
 
 ### 必要なライブラリ
 
+**方法1: requirements.txtを使用（推奨）**
+
 ```bash
-pip install numpy matplotlib deap numba
+pip install -r requirements.txt
+```
+
+**方法2: 個別にインストール**
+
+```bash
+pip install numpy matplotlib deap
+# numbaは高速化のために推奨（オプション）
+pip install numba
 ```
 
 ### 基本的な実行方法
@@ -205,9 +218,12 @@ Gen   | Best Fit   | Time(s)    | Status
 ```python
 # トラック設定
 TRACK_JSON = "track.json"  # あなたのカスタムトラック
+# または付属のサンプルトラックを使用
+# TRACK_JSON = "sample_track.json"          # 複雑なコース
+# TRACK_JSON = "example_simple_oval.json"   # シンプルな楕円コース
 ```
 
-詳細は [TRACK_EDITOR_GUIDE.md](TRACK_EDITOR_GUIDE.md) を参照してください。
+詳細は [TRACK_EDITOR_GUIDE.md](TRACK_EDITOR_GUIDE.md) と [USAGE_EXAMPLE.md](USAGE_EXAMPLE.md) を参照してください。
 
 **従来の方法**: Pythonコードを直接編集
 
@@ -281,4 +297,4 @@ SENSOR_ANGLES = np.array([-1.2, -0.7, -0.3, 0.0, 0.3, 0.7, 1.2])
 
 ---
 
-**Last Updated**: 2025-11-25
+**Last Updated**: 2025-12-05
