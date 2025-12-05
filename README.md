@@ -2,21 +2,39 @@
 
 遺伝的アルゴリズムとニューラルネットワークを使用した自動運転AIレーシングカーシミュレーション
 
+## ✨ NEW: Web UIトラックエディタ
+
+直感的なビジュアルエディタでレーシングコースを簡単に作成できるようになりました！
+
+![Track Editor](https://github.com/user-attachments/assets/9a4ab819-3861-48ba-8ec1-7a70902356b5)
+
+**クイックスタート:**
+1. ブラウザで `track_editor.html` を開く
+2. クリック＆ドラッグでコースをデザイン
+3. JSONファイルでエクスポート
+4. シミュレーションで使用
+
+詳細は [TRACK_EDITOR_GUIDE.md](TRACK_EDITOR_GUIDE.md) を参照。
+
 ## 📁 プロジェクト構成
 
 ```
-!car_simulation/
-├── g_save.py              # メインプログラム（保存/ロード機能付き）
-├── best_weights_*.npy     # 学習済み重みファイル
-├── checkpoints/           # チェックポイントデータ
-├── README.md             # このファイル
-└── *.png                 # 実行結果の可視化画像
+carNN/
+├── g_save.py                    # メインプログラム（保存/ロード機能付き）
+├── track_editor.html            # Web UIトラックエディタ（NEW!）
+├── track_loader.py              # トラックJSONローダー（NEW!）
+├── TRACK_EDITOR_GUIDE.md        # トラックエディタガイド（NEW!）
+├── best_weights_*.npy           # 学習済み重みファイル
+├── *.json                       # カスタムトラックファイル
+├── README.md                    # このファイル
+└── *.png                        # 実行結果の可視化画像
 ```
 
 ## 🚀 特徴
 
 ### 主な機能
 
+- **🎨 Web UIトラックエディタ**: ドラッグ＆ドロップで直感的にコース作成（NEW!）
 - **実車スケールシミュレーション**: 実際の車両パラメータを使用（wheelbase: 2.5m, 最高速度: 300km/h）
 - **複雑なサーキット**: Catmull-Rom スプライン補間による滑らかで複雑なコース
 - **保存/ロード機能**: 学習済みモデルの保存と読み込みが可能
