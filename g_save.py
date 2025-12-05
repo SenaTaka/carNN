@@ -589,7 +589,7 @@ if __name__ == "__main__":
     # but gracefully fall back to platform defaults if it causes issues.
     try:
         # Try to use 'fork' for better performance and compatibility with global state
-        # This works on Linux and macOS (though macOS may raise warnings)
+        # Works reliably on Linux; may fail on macOS with GUI/threading scenarios
         set_start_method('fork')
     except (RuntimeError, ValueError, OSError) as e:
         # RuntimeError: start method already set
@@ -597,6 +597,6 @@ if __name__ == "__main__":
         # OSError: fork not available on some systems
         # In any of these cases, continue with the platform default
         default_method = get_start_method()
-        print(f"ℹ️  Using platform default multiprocessing method '{default_method}' ({e.__class__.__name__})")
+        print(f"ℹ️  Using platform default multiprocessing method '{default_method}' ({e.__class__.__name__}: {e})")
     
     main()
