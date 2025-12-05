@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.animation import FuncAnimation
 from deap import base, creator, tools, algorithms
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, set_start_method, get_start_method
 import warnings
 import os
 import glob
@@ -441,6 +441,10 @@ class Visualizer:
         plt.show(block=True)
 
 def eval_wrapper(ind):
+    """
+    Wrapper function for evaluating an individual in the genetic algorithm.
+    This function is called by multiprocessing Pool, so it needs to be at module level.
+    """
     w = np.array(ind)
     fit, _, _ = simulate_car_jit(w, TRACK, HALF_WIDTH, POINTS_PER_LAP, SENSOR_ANGLES, SIM_STEPS, DT, MAX_SPEED, MAX_STEER, THROTTLE_POWER, WHEELBASE, GOAL_LINE)
     return fit,
@@ -500,8 +504,17 @@ def main():
     toolbox.register("mate", tools.cxBlend, alpha=0.5)
     toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=0.25, indpb=0.2)
     toolbox.register("select", tools.selTournament, tournsize=4)
-    pool = Pool(cpu_count())
-    toolbox.register("map", pool.map)
+    
+    # Create multiprocessing Pool (works on both macOS and Linux)
+    pool = None
+    try:
+        pool = Pool(cpu_count())
+        toolbox.register("map", pool.map)
+    except (OSError, ValueError, RuntimeError) as e:
+        print(f"⚠️  Failed to create multiprocessing Pool: {e}")
+        print("    Falling back to sequential evaluation...")
+        # If Pool creation fails, use the default map function (sequential)
+        pass
     
     # 集団初期化
     pop = toolbox.population(n=POP_SIZE)
@@ -554,8 +567,9 @@ def main():
         print("\n⚠️  Interrupted by user.")
     
     finally:
-        pool.close()
-        pool.join()
+        if pool is not None:
+            pool.close()
+            pool.join()
         
         # --- SAVE LOGIC ---
         # 日時入りのファイル名を生成
@@ -575,4 +589,25 @@ def main():
         print("Done. Close window to exit.")
 
 if __name__ == "__main__":
+    # Set multiprocessing start method for macOS compatibility
+    # On macOS (since Python 3.8), the default is 'spawn' which requires special handling
+    # 
+    # Trade-offs:
+    # - 'fork': Faster, shares global variables, but can cause issues with threads/GUIs on macOS
+    # - 'spawn': Safer on macOS, but slower and requires picklable objects
+    #
+    # We attempt 'fork' for better performance with the existing architecture (global variables),
+    # but gracefully fall back to platform defaults if it causes issues.
+    try:
+        # Try to use 'fork' for better performance and compatibility with global state
+        # Works reliably on Linux; may fail on macOS with GUI/threading scenarios
+        set_start_method('fork')
+    except (RuntimeError, ValueError, OSError) as e:
+        # RuntimeError: start method already set
+        # ValueError: 'fork' not available on platform (e.g., Windows)
+        # OSError: fork not available on some systems
+        # In any of these cases, continue with the platform default
+        default_method = get_start_method()
+        print(f"ℹ️  Using platform default multiprocessing method '{default_method}' ({e.__class__.__name__}: {e})")
+    
     main()
