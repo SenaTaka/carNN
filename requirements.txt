@@ -8,3 +8,8 @@ deap>=1.3.0
 # cupy>=9.0.0
 # For JIT compilation speedup (optional but recommended):
 # numba>=0.53.0
+
+# Optional dependencies for animation/video export
+# For GIF export (optional):
+# pillow>=8.0.0
+# For MP4 export: Install ffmpeg separately (system dependency, not a Python package)
