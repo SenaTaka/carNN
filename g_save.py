@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.animation import FuncAnimation
 from deap import base, creator, tools, algorithms
-from multiprocessing import Pool, cpu_count, set_start_method
+from multiprocessing import Pool, cpu_count, set_start_method, get_start_method
 import warnings
 import os
 import glob
@@ -495,8 +495,15 @@ def main():
     toolbox.register("select", tools.selTournament, tournsize=4)
     
     # Create multiprocessing Pool (works on both macOS and Linux)
-    pool = Pool(cpu_count())
-    toolbox.register("map", pool.map)
+    pool = None
+    try:
+        pool = Pool(cpu_count())
+        toolbox.register("map", pool.map)
+    except Exception as e:
+        print(f"⚠️  Failed to create multiprocessing Pool: {e}")
+        print("    Falling back to sequential evaluation...")
+        # If Pool creation fails, use the default map function (sequential)
+        pass
     
     # 集団初期化
     pop = toolbox.population(n=POP_SIZE)
@@ -549,8 +556,9 @@ def main():
         print("\n⚠️  Interrupted by user.")
     
     finally:
-        pool.close()
-        pool.join()
+        if pool is not None:
+            pool.close()
+            pool.join()
         
         # --- SAVE LOGIC ---
         # 日時入りのファイル名を生成
@@ -582,6 +590,7 @@ if __name__ == "__main__":
         # ValueError: 'fork' not available on platform (e.g., Windows)
         # OSError: fork not available on some systems
         # In any of these cases, continue with the platform default
-        print(f"ℹ️  Using default multiprocessing start method: {e.__class__.__name__}")
+        default_method = get_start_method()
+        print(f"ℹ️  Using platform default multiprocessing method '{default_method}' ({e.__class__.__name__})")
     
     main()
