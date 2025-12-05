@@ -577,12 +577,11 @@ if __name__ == "__main__":
         # Try to use 'fork' for better performance and compatibility with global state
         # This works on Linux and macOS (though macOS may raise warnings)
         set_start_method('fork')
-    except RuntimeError:
-        # If start method is already set or 'fork' is not available, continue with default
-        pass
-    except ValueError:
-        # 'fork' might not be available on all platforms (e.g., Windows)
-        # In that case, use the default method for the platform
+    except (RuntimeError, ValueError, OSError):
+        # RuntimeError: start method already set
+        # ValueError: 'fork' not available on platform (e.g., Windows)
+        # OSError: fork not available on some systems
+        # In any of these cases, continue with the platform default
         pass
     
     main()
