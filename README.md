@@ -175,7 +175,23 @@ Gen   | Best Fit   | Time(s)    | Status
 
 ## 🔧 カスタマイズ
 
-### コース形状の変更
+### 🎨 コース形状の変更（NEW! Web UIエディタ）
+
+**簡単な方法**: Web UIトラックエディタを使用 ✨
+
+1. ブラウザで `track_editor.html` を開く
+2. ビジュアルにコースをデザイン（クリック＆ドラッグ）
+3. JSONファイルとしてエクスポート
+4. `g_save.py` で設定：
+
+```python
+# トラック設定
+TRACK_JSON = "track.json"  # あなたのカスタムトラック
+```
+
+詳細は [TRACK_EDITOR_GUIDE.md](TRACK_EDITOR_GUIDE.md) を参照してください。
+
+**従来の方法**: Pythonコードを直接編集
 
 `generate_complex_track()` 関数内の `base_waypoints` を編集：
 

@@ -14,6 +14,7 @@ import warnings
 import os
 import glob
 from datetime import datetime
+from track_loader import get_track_from_json_or_default
 
 warnings.filterwarnings('ignore')
 plt.ion()
@@ -35,6 +36,11 @@ except ImportError:
 # "latest" : フォルダ内の 'best_weights_*.npy' のうち最新のものをロード
 # "filename.npy" : 特定のファイルを指定してロード
 LOAD_MODE = "latest"  # ← ここを変更して挙動を制御
+
+# トラック設定
+# None          : デフォルトのトラックを使用
+# "track.json"  : JSONファイルからカスタムトラックをロード
+TRACK_JSON = None  # ← カスタムトラックを使うにはJSONファイルパスを指定
 
 # ==========================================
 # パラメータ設定 (実車スケール)
@@ -80,13 +86,19 @@ def catmull_rom_spline(P0, P1, P2, P3, n_points=20):
     y = c0*P0[1] + c1*P1[1] + c2*P2[1] + c3*P3[1]
     return np.column_stack([x, y])
 
-def generate_complex_track():
-    scale = 2.0
-    base_waypoints = np.array([
-        [0, -20], [-30, -20], [-20, 20], [-10, 30], [10, 40],
-        [80, 80], [100, 70], [90, 50], [110, 30], [90, -10],
-        [100, -50], [60, -70], [20, -60], [0, -40],
-    ])
+def generate_complex_track(track_json_path=None):
+    """
+    Generate track from JSON file or use default waypoints.
+    
+    Args:
+        track_json_path (str, optional): Path to JSON track file
+        
+    Returns:
+        tuple: (track, width, points_per_lap)
+    """
+    # Load track parameters (from JSON or defaults)
+    base_waypoints, scale, width = get_track_from_json_or_default(track_json_path)
+    
     waypoints = base_waypoints * scale
     points = []
     n = len(waypoints)
@@ -94,7 +106,6 @@ def generate_complex_track():
         segment = catmull_rom_spline(waypoints[(i-1)%n], waypoints[i], waypoints[(i+1)%n], waypoints[(i+2)%n], n_points=50)
         points.append(segment)
     track = np.vstack(points)
-    width = 7.5
     return track, width, len(track)
 
 def calculate_track_poly(track, half_width):
@@ -442,7 +453,7 @@ def main():
     
     # コース生成
     print("🚧 Generating Real-Scale Track...")
-    TRACK, HALF_WIDTH, POINTS_PER_LAP = generate_complex_track()
+    TRACK, HALF_WIDTH, POINTS_PER_LAP = generate_complex_track(TRACK_JSON)
     _, _, _, GOAL_LINE = calculate_track_poly(TRACK, HALF_WIDTH)
     
     # --- LOAD LOGIC ---
