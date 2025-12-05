@@ -499,7 +499,7 @@ def main():
     try:
         pool = Pool(cpu_count())
         toolbox.register("map", pool.map)
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         print(f"⚠️  Failed to create multiprocessing Pool: {e}")
         print("    Falling back to sequential evaluation...")
         # If Pool creation fails, use the default map function (sequential)
@@ -580,7 +580,13 @@ def main():
 if __name__ == "__main__":
     # Set multiprocessing start method for macOS compatibility
     # On macOS (since Python 3.8), the default is 'spawn' which requires special handling
-    # Using 'fork' when available provides better compatibility with global variables
+    # 
+    # Trade-offs:
+    # - 'fork': Faster, shares global variables, but can cause issues with threads/GUIs on macOS
+    # - 'spawn': Safer on macOS, but slower and requires picklable objects
+    #
+    # We attempt 'fork' for better performance with the existing architecture (global variables),
+    # but gracefully fall back to platform defaults if it causes issues.
     try:
         # Try to use 'fork' for better performance and compatibility with global state
         # This works on Linux and macOS (though macOS may raise warnings)
