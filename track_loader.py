@@ -51,7 +51,7 @@ def get_track_from_json_or_default(json_path=None):
             waypoints, scale, track_width = load_track_from_json(json_path)
             print(f"✅ Loaded {len(waypoints)} waypoints (scale={scale}, width={track_width}m)")
             return waypoints, scale, track_width
-        except Exception as e:
+        except (FileNotFoundError, json.JSONDecodeError, ValueError, KeyError) as e:
             print(f"⚠️ Failed to load track: {e}")
             print("   Using default track instead.")
     

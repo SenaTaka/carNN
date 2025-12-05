@@ -748,6 +748,9 @@ track_width = ${document.getElementById('trackWidth').value}
             
             navigator.clipboard.writeText(code).then(() => {
                 alert('Pythonコードをクリップボードにコピーしました！\ng_save.py の generate_complex_track() 関数に貼り付けてください。');
+            }).catch((err) => {
+                console.error('Failed to copy to clipboard:', err);
+                alert('クリップボードへのコピーに失敗しました。ブラウザの設定を確認してください。');
             });
         });
         
