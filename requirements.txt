@@ -1,0 +1,11 @@
+# Core dependencies for carNN project
+numpy>=1.20.0
+matplotlib>=3.3.0
+deap>=1.3.0
+
+# Optional dependencies for performance optimization
+# Install with: pip install -r requirements.txt
+# For GPU acceleration (optional):
+# cupy>=9.0.0
+# For JIT compilation speedup (optional but recommended):
+# numba>=0.53.0
