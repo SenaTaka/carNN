@@ -80,16 +80,19 @@
         }
         
         .control-group input[type="number"],
-        .control-group input[type="text"] {
+        .control-group input[type="text"],
+        .control-group select {
             width: 100%;
             padding: 10px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 14px;
             transition: border-color 0.3s;
+            background: white;
         }
-        
-        .control-group input:focus {
+
+        .control-group input:focus,
+        .control-group select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -283,13 +286,24 @@
                 </div>
                 
                 <div class="control-group">
+                    <label for="presetSelect">🏁 プリセットコース</label>
+                    <select id="presetSelect">
+                        <option value="grandprix">グランプリ</option>
+                        <option value="sweeper">スイーパー</option>
+                        <option value="oval">オーバル</option>
+                        <option value="speedway">スピードウェイ</option>
+                        <option value="kidney">キドニー</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
                     <label for="trackWidth">コース幅 (m)</label>
                     <input type="number" id="trackWidth" value="7.5" min="3" max="20" step="0.5">
                 </div>
                 
                 <div class="control-group">
                     <label for="scale">スケール</label>
-                    <input type="number" id="scale" value="2.0" min="0.5" max="5" step="0.1">
+                    <input type="number" id="scale" value="1.0" min="0.5" max="5" step="0.1">
                 </div>
                 
                 <div class="control-group">
@@ -815,6 +829,55 @@ track_width = ${document.getElementById('trackWidth').value}
         draw();
 
         // ==========================================
+        // 🏁 プリセットコース（自己交差しない滑らかな閉ループ）
+        // ==========================================
+        // 原点中心の極座標 r(θ) で生成すると必ず単純閉曲線になる。
+        function polarTrack(n, fn) {
+            const pts = [];
+            for (let i = 0; i < n; i++) {
+                const th = (i / n) * Math.PI * 2;
+                const [x, y] = fn(th);
+                pts.push([Math.round(x), Math.round(y)]);
+            }
+            return pts;
+        }
+        function superellipse(n, A, B, p) {
+            return polarTrack(n, th => {
+                const c = Math.cos(th), s = Math.sin(th);
+                return [
+                    Math.sign(c) * Math.pow(Math.abs(c), 2 / p) * A,
+                    Math.sign(s) * Math.pow(Math.abs(s), 2 / p) * B,
+                ];
+            });
+        }
+        // 実寸大(メートル)で生成。scale=1.0 ならウェイポイントがそのままコース中心線に乗る。
+        const PRESETS = {
+            grandprix: polarTrack(24, th => {
+                const r = 110 * (1 + 0.16 * Math.sin(3 * th + 0.6) + 0.10 * Math.cos(2 * th));
+                return [Math.cos(th) * r, Math.sin(th) * r * 0.88];
+            }),
+            sweeper: polarTrack(20, th => {
+                const r = 112 * (1 + 0.28 * Math.sin(2 * th));
+                return [Math.cos(th) * r, Math.sin(th) * r];
+            }),
+            oval: polarTrack(16, th => [Math.cos(th) * 145, Math.sin(th) * 82]),
+            speedway: superellipse(22, 165, 95, 3.5),
+            kidney: polarTrack(20, th => {
+                const r = 105 * (1 + 0.30 * Math.cos(th));
+                return [Math.cos(th) * r, Math.sin(th) * r];
+            }),
+        };
+        function applyPreset(name) {
+            const wp = PRESETS[name];
+            if (!wp) return;
+            waypoints = wp.map(p => ({ x: p[0], y: p[1] }));
+            selectedWaypoint = null;
+            updateWaypointList();
+            draw();
+        }
+        document.getElementById('presetSelect').addEventListener('change', (e) => applyPreset(e.target.value));
+
+        // ==========================================
         // 🤖 AI学習コントローラ（Web Worker + sim.js）
         // ==========================================
         const raceCanvas = document.getElementById('raceCanvas');
@@ -824,6 +887,8 @@ track_width = ${document.getElementById('trackWidth').value}
         let worker = null;
         let raceAnim = null;
         let fitHistory = [];
+        // 表示中のベスト走行（連続再生用の状態）。世代が進むと中身だけ差し替える。
+        let raceState = null;
 
         // トラック点列(bounds)を raceCanvas にフィットさせる変換を返す
         function makeTransform(points) {
@@ -843,19 +908,20 @@ track_width = ${document.getElementById('trackWidth').value}
             return (x, y) => [ox + (x - minx) * s, raceCanvas.height - (oy + (y - miny) * s)];
         }
 
+        // 車（進行方向を向いた三角形）
         function drawCar(toScreen, x, y, theta) {
-            const s = toScreen(x, y);
+            const l = 4.0, w = 2.2; // メートル
+            const c = Math.cos(theta), s = Math.sin(theta);
+            const corners = [[l, 0], [-l * 0.6, w], [-l * 0.6, -w]].map(([lx, ly]) => {
+                return toScreen(x + lx * c - ly * s, y + lx * s + ly * c);
+            });
             rctx.fillStyle = '#00e5ff';
+            rctx.strokeStyle = '#003844';
+            rctx.lineWidth = 1.5;
             rctx.beginPath();
-            rctx.arc(s[0], s[1], 6, 0, Math.PI * 2);
+            corners.forEach((p, i) => i === 0 ? rctx.moveTo(p[0], p[1]) : rctx.lineTo(p[0], p[1]));
+            rctx.closePath();
             rctx.fill();
-            // 進行方向（5m先）へのライン
-            const hs = toScreen(x + Math.cos(theta) * 5, y + Math.sin(theta) * 5);
-            rctx.strokeStyle = '#00e5ff';
-            rctx.lineWidth = 2;
-            rctx.beginPath();
-            rctx.moveTo(s[0], s[1]);
-            rctx.lineTo(hs[0], hs[1]);
             rctx.stroke();
         }
 
@@ -880,80 +946,80 @@ track_width = ${document.getElementById('trackWidth').value}
             rctx.fillText('Fitness', x0 + 4, y0 + 13);
         }
 
-        // ベスト個体の軌跡を raceCanvas にアニメ描画
-        function startRaceAnim(pointsObj, S, traj) {
-            if (raceAnim) cancelAnimationFrame(raceAnim);
-            raceCanvas.style.display = 'block';
+        // 表示するベスト走行を更新（コース図は据え置き、軌跡だけ差し替え）
+        function setRaceBest(pointsObj, S, traj) {
             const toScreen = makeTransform(pointsObj);
             const trackWidth = parseFloat(document.getElementById('trackWidth').value);
             const { inner, outer } = calculateNormals(pointsObj, trackWidth);
-            let frame = 0;
-            const skip = Math.max(1, Math.floor(traj.length / 300));
+            // 約5秒で1周再生になるようコマ送り量を決める
+            const step = Math.max(1, Math.floor(traj.length / 300));
+            const keepFrame = raceState ? raceState.frame : 0;
+            raceState = { S, traj, toScreen, inner, outer, step, frame: 0, prevLen: traj.length };
+            // 同程度の長さなら再生位置を引き継いで滑らかに見せる
+            if (keepFrame < traj.length) raceState.frame = keepFrame;
+        }
 
-            function render() {
-                rctx.fillStyle = '#111';
-                rctx.fillRect(0, 0, raceCanvas.width, raceCanvas.height);
+        // 永続アニメーションループ：常にベスト車を走らせ、終端でループ
+        function raceLoop() {
+            raceAnim = requestAnimationFrame(raceLoop);
+            const st = raceState;
+            if (!st) return;
+            const ts = st.toScreen;
 
-                // 路面
-                rctx.fillStyle = '#444';
+            rctx.fillStyle = '#111';
+            rctx.fillRect(0, 0, raceCanvas.width, raceCanvas.height);
+
+            // 路面
+            rctx.fillStyle = '#444';
+            rctx.beginPath();
+            st.outer.forEach((p, i) => { const s = ts(p.x, p.y); i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); });
+            for (let i = st.inner.length - 1; i >= 0; i--) { const s = ts(st.inner[i].x, st.inner[i].y); rctx.lineTo(s[0], s[1]); }
+            rctx.closePath();
+            rctx.fill();
+
+            // 境界線
+            rctx.strokeStyle = '#fff';
+            rctx.lineWidth = 1.5;
+            [st.inner, st.outer].forEach(border => {
                 rctx.beginPath();
-                outer.forEach((p, i) => {
-                    const s = toScreen(p.x, p.y);
-                    i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]);
-                });
-                for (let i = inner.length - 1; i >= 0; i--) {
-                    const s = toScreen(inner[i].x, inner[i].y);
-                    rctx.lineTo(s[0], s[1]);
-                }
+                border.forEach((p, i) => { const s = ts(p.x, p.y); i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); });
                 rctx.closePath();
-                rctx.fill();
-
-                // 境界線
-                rctx.strokeStyle = '#fff';
-                rctx.lineWidth = 1.5;
-                [inner, outer].forEach(border => {
-                    rctx.beginPath();
-                    border.forEach((p, i) => {
-                        const s = toScreen(p.x, p.y);
-                        i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]);
-                    });
-                    rctx.closePath();
-                    rctx.stroke();
-                });
-
-                // ゴールライン
-                rctx.strokeStyle = '#ff0055';
-                rctx.lineWidth = 3;
-                const a = toScreen(S.goal[0], S.goal[1]);
-                const b = toScreen(S.goal[2], S.goal[3]);
-                rctx.beginPath();
-                rctx.moveTo(a[0], a[1]);
-                rctx.lineTo(b[0], b[1]);
                 rctx.stroke();
+            });
 
-                // 走行軌跡
-                rctx.strokeStyle = 'rgba(255,165,0,0.6)';
-                rctx.lineWidth = 2;
-                rctx.beginPath();
-                traj.forEach((t, i) => {
-                    const s = toScreen(t[0], t[1]);
-                    i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]);
-                });
-                rctx.stroke();
+            // ゴールライン
+            rctx.strokeStyle = '#ff0055';
+            rctx.lineWidth = 3;
+            const a = ts(st.S.goal[0], st.S.goal[1]);
+            const b = ts(st.S.goal[2], st.S.goal[3]);
+            rctx.beginPath(); rctx.moveTo(a[0], a[1]); rctx.lineTo(b[0], b[1]); rctx.stroke();
 
-                // 車
-                const t = traj[Math.min(frame, traj.length - 1)];
-                drawCar(toScreen, t[0], t[1], t[2]);
+            // これまで通った軌跡（薄い線）
+            rctx.strokeStyle = 'rgba(255,165,0,0.35)';
+            rctx.lineWidth = 2;
+            rctx.beginPath();
+            st.traj.forEach((t, i) => { const s = ts(t[0], t[1]); i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); });
+            rctx.stroke();
 
-                // fitnessスパークライン
-                drawSpark();
+            // 現在地点までの濃い軌跡（テール）
+            const cur = Math.min(st.frame, st.traj.length - 1);
+            rctx.strokeStyle = '#ffae00';
+            rctx.lineWidth = 3;
+            rctx.beginPath();
+            const tail = Math.max(0, cur - st.step * 40);
+            for (let i = tail; i <= cur; i++) { const s = ts(st.traj[i][0], st.traj[i][1]); i === tail ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); }
+            rctx.stroke();
 
-                frame += skip;
-                if (frame < traj.length + skip) {
-                    raceAnim = requestAnimationFrame(render);
-                }
-            }
-            render();
+            // 車
+            const t = st.traj[cur];
+            drawCar(ts, t[0], t[1], t[2]);
+
+            // fitnessスパークライン
+            drawSpark();
+
+            // コマを進める（終端でループ）
+            st.frame += st.step;
+            if (st.frame >= st.traj.length) st.frame = 0;
         }
 
         function onProgress(m, pointsObj, S) {
@@ -962,10 +1028,10 @@ track_width = ${document.getElementById('trackWidth').value}
             document.getElementById('trainFit').textContent = `Fitness: ${m.fit.toFixed(1)}`;
             document.getElementById('trainTime').textContent = `Time: ${m.time.toFixed(2)} s`;
             document.getElementById('trainState').textContent = m.finished ? '🏁 完走!' : `走行中 (${m.pct}%)`;
-            // ベスト重みでメインスレッド側に軌跡を再現してアニメ
+            // ベスト重みから軌跡を再現して表示を差し替え
             const w = Float64Array.from(m.weights);
             const r = CARNN.simulateCar(w, S, true);
-            if (r.traj && r.traj.length > 1) startRaceAnim(pointsObj, S, r.traj);
+            if (r.traj && r.traj.length > 1) setRaceBest(pointsObj, S, r.traj);
         }
 
         function finishTraining(label) {
@@ -973,6 +1039,7 @@ track_width = ${document.getElementById('trackWidth').value}
             stopBtn.style.display = 'none';
             document.getElementById('trainState').textContent = label;
             if (worker) { worker.terminate(); worker = null; }
+            // アニメは止めず、最後のベスト走行を走り続けさせる（鑑賞用）
         }
 
         trainBtn.addEventListener('click', () => {
@@ -989,10 +1056,14 @@ track_width = ${document.getElementById('trackWidth').value}
             const generations = parseInt(document.getElementById('generations').value);
 
             fitHistory = [];
+            raceState = null;
             document.getElementById('trainStatus').style.display = 'block';
             document.getElementById('trainState').textContent = '学習中…';
             trainBtn.style.display = 'none';
             stopBtn.style.display = 'block';
+            raceCanvas.style.display = 'block';
+            if (raceAnim) cancelAnimationFrame(raceAnim);
+            raceLoop(); // 永続アニメ開始
 
             worker = new Worker('worker.js');
             worker.onmessage = (e) => {
@@ -1023,6 +1094,10 @@ track_width = ${document.getElementById('trackWidth').value}
             if (worker) worker.postMessage({ type: 'stop' });
             finishTraining('⏹ 停止しました');
         });
+
+        // 起動時に高品質プリセットを適用
+        document.getElementById('presetSelect').value = 'grandprix';
+        applyPreset('grandprix');
     </script>
 </body>
 </html>
