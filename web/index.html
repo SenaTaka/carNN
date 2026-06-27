@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>carNN Track Editor - コースエディタ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.95;
+        }
+        
+        .content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 0;
+        }
+        
+        .sidebar {
+            background: #f8f9fa;
+            padding: 25px;
+            border-right: 1px solid #e0e0e0;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+        
+        .sidebar h2 {
+            font-size: 1.4em;
+            margin-bottom: 20px;
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .control-group {
+            margin-bottom: 25px;
+        }
+        
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .control-group input[type="number"],
+        .control-group input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .control-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+        
+        .canvas-container {
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #fafafa;
+        }
+        
+        #trackCanvas {
+            border: 3px solid #667eea;
+            border-radius: 8px;
+            cursor: crosshair;
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .info-box p {
+            margin: 5px 0;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        .stats {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+        }
+        
+        .stats h3 {
+            margin-bottom: 10px;
+            color: #856404;
+        }
+        
+        .stats p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #856404;
+        }
+        
+        .mode-indicator {
+            background: #28a745;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        
+        .mode-indicator.move {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .waypoint-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        
+        .waypoint-item {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+        
+        .waypoint-item:hover {
+            background: #e9ecef;
+        }
+        
+        .waypoint-item.selected {
+            background: #667eea;
+            color: white;
+        }
+
+        .race-canvas {
+            margin-top: 20px;
+            border: 3px solid #764ba2;
+            border-radius: 8px;
+            background: #111;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            max-width: 100%;
+        }
+    </style>
+    <script src="sim.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏎️ carNN Track Editor</h1>
+            <p>ビジュアルにレーシングコースを作成しよう！</p>
+        </div>
+        
+        <div class="content">
+            <div class="sidebar">
+                <h2>⚙️ コントロール</h2>
+                
+                <div class="mode-indicator" id="modeIndicator">
+                    モード: ウェイポイント追加
+                </div>
+                
+                <div class="info-box">
+                    <p><strong>使い方:</strong></p>
+                    <p>• クリックでウェイポイントを追加</p>
+                    <p>• ウェイポイントをドラッグして移動</p>
+                    <p>• ウェイポイントを右クリックで削除</p>
+                    <p>• マウスホイールでズーム</p>
+                </div>
+                
+                <div class="control-group">
+                    <button class="btn-secondary" id="toggleModeBtn">
+                        🖱️ 移動モードに切替
+                    </button>
+                </div>
+                
+                <div class="control-group">
+                    <label for="trackWidth">コース幅 (m)</label>
+                    <input type="number" id="trackWidth" value="7.5" min="3" max="20" step="0.5">
+                </div>
+                
+                <div class="control-group">
+                    <label for="scale">スケール</label>
+                    <input type="number" id="scale" value="2.0" min="0.5" max="5" step="0.1">
+                </div>
+                
+                <div class="control-group">
+                    <label for="splinePoints">スプライン解像度</label>
+                    <input type="number" id="splinePoints" value="50" min="10" max="100" step="10">
+                </div>
+                
+                <h2>📝 ウェイポイント</h2>
+                <div class="waypoint-list" id="waypointList"></div>
+                
+                <div class="control-group">
+                    <button class="btn-danger" id="clearBtn">
+                        🗑️ すべて削除
+                    </button>
+                </div>
+                
+                <h2>💾 エクスポート</h2>
+                
+                <div class="control-group">
+                    <button class="btn-success" id="exportJsonBtn">
+                        📥 JSONでダウンロード
+                    </button>
+                </div>
+                
+                <div class="control-group">
+                    <button class="btn-primary" id="exportPythonBtn">
+                        🐍 Pythonコードをコピー
+                    </button>
+                </div>
+                
+                <div class="control-group">
+                    <label for="loadJson">JSONをロード</label>
+                    <input type="file" id="loadJson" accept=".json" style="display:none">
+                    <button class="btn-secondary" onclick="document.getElementById('loadJson').click()">
+                        📂 ファイルを開く
+                    </button>
+                </div>
+                
+                <div class="stats">
+                    <h3>📊 統計</h3>
+                    <p id="waypointCount">ウェイポイント数: 0</p>
+                    <p id="trackLength">コース長: 0 m</p>
+                </div>
+
+                <h2>🤖 AI学習</h2>
+                <div class="info-box">
+                    <p>ブラウザ内で遺伝的アルゴリズムを実行します（GPU不要・サーバー不要）。重い計算はバックグラウンドで動くのでUIは固まりません。</p>
+                </div>
+                <div class="control-group">
+                    <label for="popSize">集団サイズ</label>
+                    <input type="number" id="popSize" value="40" min="10" max="300" step="10">
+                </div>
+                <div class="control-group">
+                    <label for="generations">世代数</label>
+                    <input type="number" id="generations" value="60" min="10" max="1000" step="10">
+                </div>
+                <div class="control-group">
+                    <button class="btn-primary" id="trainBtn">🚀 学習スタート</button>
+                    <button class="btn-danger" id="stopBtn" style="display:none">⏹ 停止</button>
+                </div>
+                <div class="stats" id="trainStatus" style="display:none">
+                    <h3 id="trainState">準備中…</h3>
+                    <p id="trainGen">Gen: -</p>
+                    <p id="trainFit">Fitness: -</p>
+                    <p id="trainTime">Time: -</p>
+                </div>
+            </div>
+
+            <div class="canvas-container">
+                <canvas id="trackCanvas" width="1000" height="800"></canvas>
+                <canvas id="raceCanvas" class="race-canvas" width="1000" height="600" style="display:none"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('trackCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // State
+        let waypoints = [];
+        let mode = 'add'; // 'add' or 'move'
+        let selectedWaypoint = null;
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        let panOffset = { x: canvas.width / 2, y: canvas.height / 2 };
+        let zoom = 1.0;
+        
+        // Default waypoints (same as in g_save.py)
+        const defaultWaypoints = [
+            [0, -20], [-30, -20], [-20, 20], [-10, 30], [10, 40],
+            [80, 80], [100, 70], [90, 50], [110, 30], [90, -10],
+            [100, -50], [60, -70], [20, -60], [0, -40]
+        ];
+        
+        // Initialize with default waypoints
+        waypoints = defaultWaypoints.map(p => ({ x: p[0], y: p[1] }));
+        
+        // Catmull-Rom spline interpolation
+        function catmullRomSpline(P0, P1, P2, P3, nPoints) {
+            const points = [];
+            for (let i = 0; i < nPoints; i++) {
+                const t = i / (nPoints - 1);
+                const t2 = t * t;
+                const t3 = t2 * t;
+                
+                const c0 = -0.5 * t3 + t2 - 0.5 * t;
+                const c1 = 1.5 * t3 - 2.5 * t2 + 1.0;
+                const c2 = -1.5 * t3 + 2.0 * t2 + 0.5 * t;
+                const c3 = 0.5 * t3 - 0.5 * t2;
+                
+                const x = c0 * P0.x + c1 * P1.x + c2 * P2.x + c3 * P3.x;
+                const y = c0 * P0.y + c1 * P1.y + c2 * P2.y + c3 * P3.y;
+                
+                points.push({ x, y });
+            }
+            return points;
+        }
+        
+        // Generate track from waypoints
+        function generateTrack() {
+            if (waypoints.length < 3) return [];
+            
+            const scale = parseFloat(document.getElementById('scale').value);
+            const splinePoints = parseInt(document.getElementById('splinePoints').value);
+            const scaledWaypoints = waypoints.map(p => ({ x: p.x * scale, y: p.y * scale }));
+            
+            const track = [];
+            const n = scaledWaypoints.length;
+            
+            for (let i = 0; i < n; i++) {
+                const P0 = scaledWaypoints[(i - 1 + n) % n];
+                const P1 = scaledWaypoints[i];
+                const P2 = scaledWaypoints[(i + 1) % n];
+                const P3 = scaledWaypoints[(i + 2) % n];
+                
+                const segment = catmullRomSpline(P0, P1, P2, P3, splinePoints);
+                track.push(...segment);
+            }
+            
+            return track;
+        }
+        
+        // Calculate track normals
+        function calculateNormals(track, halfWidth) {
+            if (track.length < 2) return { inner: [], outer: [] };
+            
+            const normals = [];
+            for (let i = 0; i < track.length; i++) {
+                const prev = track[(i - 1 + track.length) % track.length];
+                const next = track[(i + 1) % track.length];
+                
+                const dx = next.x - prev.x;
+                const dy = next.y - prev.y;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                
+                normals.push({ x: -dy / len, y: dx / len });
+            }
+            
+            const inner = track.map((p, i) => ({
+                x: p.x + normals[i].x * halfWidth,
+                y: p.y + normals[i].y * halfWidth
+            }));
+            
+            const outer = track.map((p, i) => ({
+                x: p.x - normals[i].x * halfWidth,
+                y: p.y - normals[i].y * halfWidth
+            }));
+            
+            return { inner, outer };
+        }
+        
+        // World to screen coordinates
+        function worldToScreen(wx, wy) {
+            return {
+                x: wx * zoom + panOffset.x,
+                y: -wy * zoom + panOffset.y  // Flip Y axis
+            };
+        }
+        
+        // Screen to world coordinates
+        function screenToWorld(sx, sy) {
+            return {
+                x: (sx - panOffset.x) / zoom,
+                y: -(sy - panOffset.y) / zoom  // Flip Y axis
+            };
+        }
+        
+        // Draw the track
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid
+            ctx.strokeStyle = '#f0f0f0';
+            ctx.lineWidth = 1;
+            const gridSize = 50 * zoom;
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // Draw origin
+            const origin = worldToScreen(0, 0);
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(origin.x - 10, origin.y);
+            ctx.lineTo(origin.x + 10, origin.y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(origin.x, origin.y - 10);
+            ctx.lineTo(origin.x, origin.y + 10);
+            ctx.stroke();
+            
+            // Draw track
+            if (waypoints.length >= 3) {
+                const track = generateTrack();
+                const trackWidth = parseFloat(document.getElementById('trackWidth').value);
+                const { inner, outer } = calculateNormals(track, trackWidth);
+                
+                // Draw road
+                ctx.fillStyle = '#444444';
+                ctx.beginPath();
+                outer.forEach((p, i) => {
+                    const screen = worldToScreen(p.x, p.y);
+                    if (i === 0) ctx.moveTo(screen.x, screen.y);
+                    else ctx.lineTo(screen.x, screen.y);
+                });
+                for (let i = inner.length - 1; i >= 0; i--) {
+                    const screen = worldToScreen(inner[i].x, inner[i].y);
+                    ctx.lineTo(screen.x, screen.y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                // Draw borders
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                inner.forEach((p, i) => {
+                    const screen = worldToScreen(p.x, p.y);
+                    if (i === 0) ctx.moveTo(screen.x, screen.y);
+                    else ctx.lineTo(screen.x, screen.y);
+                });
+                ctx.closePath();
+                ctx.stroke();
+                
+                ctx.beginPath();
+                outer.forEach((p, i) => {
+                    const screen = worldToScreen(p.x, p.y);
+                    if (i === 0) ctx.moveTo(screen.x, screen.y);
+                    else ctx.lineTo(screen.x, screen.y);
+                });
+                ctx.closePath();
+                ctx.stroke();
+                
+                // Draw goal line
+                if (inner.length > 0 && outer.length > 0) {
+                    ctx.strokeStyle = '#ff0055';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    const innerStart = worldToScreen(inner[0].x, inner[0].y);
+                    const outerStart = worldToScreen(outer[0].x, outer[0].y);
+                    ctx.moveTo(innerStart.x, innerStart.y);
+                    ctx.lineTo(outerStart.x, outerStart.y);
+                    ctx.stroke();
+                }
+                
+                // Update stats
+                const trackLength = track.reduce((sum, p, i) => {
+                    if (i === 0) return 0;
+                    const prev = track[i - 1];
+                    const dx = p.x - prev.x;
+                    const dy = p.y - prev.y;
+                    return sum + Math.sqrt(dx * dx + dy * dy);
+                }, 0);
+                document.getElementById('trackLength').textContent = `コース長: ${trackLength.toFixed(1)} m`;
+            }
+            
+            // Draw waypoint connections
+            if (waypoints.length > 1) {
+                ctx.strokeStyle = '#2196F3';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                waypoints.forEach((p, i) => {
+                    const screen = worldToScreen(p.x, p.y);
+                    if (i === 0) ctx.moveTo(screen.x, screen.y);
+                    else ctx.lineTo(screen.x, screen.y);
+                });
+                ctx.closePath();
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            
+            // Draw waypoints
+            waypoints.forEach((p, i) => {
+                const screen = worldToScreen(p.x, p.y);
+                const isSelected = selectedWaypoint === i;
+                
+                ctx.fillStyle = isSelected ? '#ff6b6b' : '#667eea';
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 3;
+                
+                ctx.beginPath();
+                ctx.arc(screen.x, screen.y, isSelected ? 10 : 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Draw waypoint number
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i.toString(), screen.x, screen.y);
+            });
+            
+            // Update waypoint count
+            document.getElementById('waypointCount').textContent = `ウェイポイント数: ${waypoints.length}`;
+        }
+        
+        // Update waypoint list
+        function updateWaypointList() {
+            const list = document.getElementById('waypointList');
+            list.innerHTML = '';
+            
+            waypoints.forEach((p, i) => {
+                const item = document.createElement('div');
+                item.className = 'waypoint-item' + (selectedWaypoint === i ? ' selected' : '');
+                item.innerHTML = `
+                    <span>#${i}: (${p.x.toFixed(1)}, ${p.y.toFixed(1)})</span>
+                `;
+                item.onclick = () => {
+                    selectedWaypoint = i;
+                    updateWaypointList();
+                    draw();
+                };
+                list.appendChild(item);
+            });
+        }
+        
+        // Mouse events
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const sx = e.clientX - rect.left;
+            const sy = e.clientY - rect.top;
+            const world = screenToWorld(sx, sy);
+            
+            if (e.button === 0) { // Left click
+                if (mode === 'add') {
+                    waypoints.push({ x: Math.round(world.x), y: Math.round(world.y) });
+                    selectedWaypoint = waypoints.length - 1;
+                    updateWaypointList();
+                    draw();
+                } else if (mode === 'move') {
+                    // Check if clicking on a waypoint
+                    for (let i = 0; i < waypoints.length; i++) {
+                        const screen = worldToScreen(waypoints[i].x, waypoints[i].y);
+                        const dx = screen.x - sx;
+                        const dy = screen.y - sy;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist < 15) {
+                            isDragging = true;
+                            selectedWaypoint = i;
+                            dragOffset = { x: world.x - waypoints[i].x, y: world.y - waypoints[i].y };
+                            updateWaypointList();
+                            draw();
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging && selectedWaypoint !== null) {
+                const rect = canvas.getBoundingClientRect();
+                const sx = e.clientX - rect.left;
+                const sy = e.clientY - rect.top;
+                const world = screenToWorld(sx, sy);
+                
+                waypoints[selectedWaypoint].x = Math.round(world.x - dragOffset.x);
+                waypoints[selectedWaypoint].y = Math.round(world.y - dragOffset.y);
+                updateWaypointList();
+                draw();
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+        
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const sx = e.clientX - rect.left;
+            const sy = e.clientY - rect.top;
+            
+            // Check if clicking on a waypoint to delete
+            for (let i = 0; i < waypoints.length; i++) {
+                const screen = worldToScreen(waypoints[i].x, waypoints[i].y);
+                const dx = screen.x - sx;
+                const dy = screen.y - sy;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                
+                if (dist < 15) {
+                    waypoints.splice(i, 1);
+                    selectedWaypoint = null;
+                    updateWaypointList();
+                    draw();
+                    break;
+                }
+            }
+        });
+        
+        // Zoom
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            zoom *= delta;
+            zoom = Math.max(0.1, Math.min(5, zoom));
+            draw();
+        });
+        
+        // Button events
+        document.getElementById('toggleModeBtn').addEventListener('click', () => {
+            mode = mode === 'add' ? 'move' : 'add';
+            const indicator = document.getElementById('modeIndicator');
+            const btn = document.getElementById('toggleModeBtn');
+            
+            if (mode === 'add') {
+                indicator.textContent = 'モード: ウェイポイント追加';
+                indicator.className = 'mode-indicator';
+                btn.textContent = '🖱️ 移動モードに切替';
+            } else {
+                indicator.textContent = 'モード: ウェイポイント移動';
+                indicator.className = 'mode-indicator move';
+                btn.textContent = '➕ 追加モードに切替';
+            }
+        });
+        
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            if (confirm('すべてのウェイポイントを削除しますか？')) {
+                waypoints = [];
+                selectedWaypoint = null;
+                updateWaypointList();
+                draw();
+            }
+        });
+        
+        document.getElementById('trackWidth').addEventListener('input', draw);
+        document.getElementById('scale').addEventListener('input', draw);
+        document.getElementById('splinePoints').addEventListener('input', draw);
+        
+        // Export functions
+        document.getElementById('exportJsonBtn').addEventListener('click', () => {
+            const data = {
+                waypoints: waypoints.map(p => [p.x, p.y]),
+                trackWidth: parseFloat(document.getElementById('trackWidth').value),
+                scale: parseFloat(document.getElementById('scale').value)
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'track.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+        
+        document.getElementById('exportPythonBtn').addEventListener('click', () => {
+            const code = `# Generated track waypoints
+base_waypoints = np.array([
+${waypoints.map(p => `    [${p.x}, ${p.y}]`).join(',\n')}
+])
+scale = ${document.getElementById('scale').value}
+track_width = ${document.getElementById('trackWidth').value}
+`;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                alert('Pythonコードをクリップボードにコピーしました！\ng_save.py の generate_complex_track() 関数に貼り付けてください。');
+            }).catch((err) => {
+                console.error('Failed to copy to clipboard:', err);
+                alert('クリップボードへのコピーに失敗しました。ブラウザの設定を確認してください。');
+            });
+        });
+        
+        // Load JSON
+        document.getElementById('loadJson').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        waypoints = data.waypoints.map(p => ({ x: p[0], y: p[1] }));
+                        document.getElementById('trackWidth').value = data.trackWidth || 7.5;
+                        document.getElementById('scale').value = data.scale || 2.0;
+                        selectedWaypoint = null;
+                        updateWaypointList();
+                        draw();
+                    } catch (err) {
+                        alert('JSONファイルの読み込みに失敗しました: ' + err.message);
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+        
+        // Initial draw
+        updateWaypointList();
+        draw();
+
+        // ==========================================
+        // 🤖 AI学習コントローラ（Web Worker + sim.js）
+        // ==========================================
+        const raceCanvas = document.getElementById('raceCanvas');
+        const rctx = raceCanvas.getContext('2d');
+        const trainBtn = document.getElementById('trainBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        let worker = null;
+        let raceAnim = null;
+        let fitHistory = [];
+
+        // トラック点列(bounds)を raceCanvas にフィットさせる変換を返す
+        function makeTransform(points) {
+            let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+            for (const p of points) {
+                if (p.x < minx) minx = p.x;
+                if (p.x > maxx) maxx = p.x;
+                if (p.y < miny) miny = p.y;
+                if (p.y > maxy) maxy = p.y;
+            }
+            const pad = 40;
+            const w = (maxx - minx) || 1, h = (maxy - miny) || 1;
+            const s = Math.min((raceCanvas.width - 2 * pad) / w, (raceCanvas.height - 2 * pad) / h);
+            const ox = pad + (raceCanvas.width - 2 * pad - w * s) / 2;
+            const oy = pad + (raceCanvas.height - 2 * pad - h * s) / 2;
+            // Y軸は画面では下向きなので反転
+            return (x, y) => [ox + (x - minx) * s, raceCanvas.height - (oy + (y - miny) * s)];
+        }
+
+        function drawCar(toScreen, x, y, theta) {
+            const s = toScreen(x, y);
+            rctx.fillStyle = '#00e5ff';
+            rctx.beginPath();
+            rctx.arc(s[0], s[1], 6, 0, Math.PI * 2);
+            rctx.fill();
+            // 進行方向（5m先）へのライン
+            const hs = toScreen(x + Math.cos(theta) * 5, y + Math.sin(theta) * 5);
+            rctx.strokeStyle = '#00e5ff';
+            rctx.lineWidth = 2;
+            rctx.beginPath();
+            rctx.moveTo(s[0], s[1]);
+            rctx.lineTo(hs[0], hs[1]);
+            rctx.stroke();
+        }
+
+        function drawSpark() {
+            if (fitHistory.length < 2) return;
+            const w = 200, h = 60, x0 = 10, y0 = 10;
+            rctx.fillStyle = 'rgba(0,0,0,0.55)';
+            rctx.fillRect(x0, y0, w, h);
+            const mx = Math.max(...fitHistory), mn = Math.min(...fitHistory);
+            const rng = (mx - mn) || 1;
+            rctx.strokeStyle = '#00e5ff';
+            rctx.lineWidth = 1.5;
+            rctx.beginPath();
+            fitHistory.forEach((f, i) => {
+                const px = x0 + (i / (fitHistory.length - 1)) * w;
+                const py = y0 + h - ((f - mn) / rng) * h;
+                i === 0 ? rctx.moveTo(px, py) : rctx.lineTo(px, py);
+            });
+            rctx.stroke();
+            rctx.fillStyle = '#fff';
+            rctx.font = '11px sans-serif';
+            rctx.fillText('Fitness', x0 + 4, y0 + 13);
+        }
+
+        // ベスト個体の軌跡を raceCanvas にアニメ描画
+        function startRaceAnim(pointsObj, S, traj) {
+            if (raceAnim) cancelAnimationFrame(raceAnim);
+            raceCanvas.style.display = 'block';
+            const toScreen = makeTransform(pointsObj);
+            const trackWidth = parseFloat(document.getElementById('trackWidth').value);
+            const { inner, outer } = calculateNormals(pointsObj, trackWidth);
+            let frame = 0;
+            const skip = Math.max(1, Math.floor(traj.length / 300));
+
+            function render() {
+                rctx.fillStyle = '#111';
+                rctx.fillRect(0, 0, raceCanvas.width, raceCanvas.height);
+
+                // 路面
+                rctx.fillStyle = '#444';
+                rctx.beginPath();
+                outer.forEach((p, i) => {
+                    const s = toScreen(p.x, p.y);
+                    i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]);
+                });
+                for (let i = inner.length - 1; i >= 0; i--) {
+                    const s = toScreen(inner[i].x, inner[i].y);
+                    rctx.lineTo(s[0], s[1]);
+                }
+                rctx.closePath();
+                rctx.fill();
+
+                // 境界線
+                rctx.strokeStyle = '#fff';
+                rctx.lineWidth = 1.5;
+                [inner, outer].forEach(border => {
+                    rctx.beginPath();
+                    border.forEach((p, i) => {
+                        const s = toScreen(p.x, p.y);
+                        i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]);
+                    });
+                    rctx.closePath();
+                    rctx.stroke();
+                });
+
+                // ゴールライン
+                rctx.strokeStyle = '#ff0055';
+                rctx.lineWidth = 3;
+                const a = toScreen(S.goal[0], S.goal[1]);
+                const b = toScreen(S.goal[2], S.goal[3]);
+                rctx.beginPath();
+                rctx.moveTo(a[0], a[1]);
+                rctx.lineTo(b[0], b[1]);
+                rctx.stroke();
+
+                // 走行軌跡
+                rctx.strokeStyle = 'rgba(255,165,0,0.6)';
+                rctx.lineWidth = 2;
+                rctx.beginPath();
+                traj.forEach((t, i) => {
+                    const s = toScreen(t[0], t[1]);
+                    i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]);
+                });
+                rctx.stroke();
+
+                // 車
+                const t = traj[Math.min(frame, traj.length - 1)];
+                drawCar(toScreen, t[0], t[1], t[2]);
+
+                // fitnessスパークライン
+                drawSpark();
+
+                frame += skip;
+                if (frame < traj.length + skip) {
+                    raceAnim = requestAnimationFrame(render);
+                }
+            }
+            render();
+        }
+
+        function onProgress(m, pointsObj, S) {
+            fitHistory.push(m.fit);
+            document.getElementById('trainGen').textContent = `Gen: ${m.gen} / ${m.totalGen}`;
+            document.getElementById('trainFit').textContent = `Fitness: ${m.fit.toFixed(1)}`;
+            document.getElementById('trainTime').textContent = `Time: ${m.time.toFixed(2)} s`;
+            document.getElementById('trainState').textContent = m.finished ? '🏁 完走!' : `走行中 (${m.pct}%)`;
+            // ベスト重みでメインスレッド側に軌跡を再現してアニメ
+            const w = Float64Array.from(m.weights);
+            const r = CARNN.simulateCar(w, S, true);
+            if (r.traj && r.traj.length > 1) startRaceAnim(pointsObj, S, r.traj);
+        }
+
+        function finishTraining(label) {
+            trainBtn.style.display = 'block';
+            stopBtn.style.display = 'none';
+            document.getElementById('trainState').textContent = label;
+            if (worker) { worker.terminate(); worker = null; }
+        }
+
+        trainBtn.addEventListener('click', () => {
+            if (waypoints.length < 3) {
+                alert('ウェイポイントを3つ以上配置してください。');
+                return;
+            }
+            // 学習対象のコース（スケール適用済み点列）
+            const pointsObj = generateTrack(); // [{x,y},...]
+            const trackWidth = parseFloat(document.getElementById('trackWidth').value);
+            const S = CARNN.buildSim(pointsObj, trackWidth);
+
+            const popSize = parseInt(document.getElementById('popSize').value);
+            const generations = parseInt(document.getElementById('generations').value);
+
+            fitHistory = [];
+            document.getElementById('trainStatus').style.display = 'block';
+            document.getElementById('trainState').textContent = '学習中…';
+            trainBtn.style.display = 'none';
+            stopBtn.style.display = 'block';
+
+            worker = new Worker('worker.js');
+            worker.onmessage = (e) => {
+                const m = e.data;
+                if (m.type === 'progress') {
+                    onProgress(m, pointsObj, S);
+                } else if (m.type === 'done') {
+                    onProgress({ ...m, gen: generations, totalGen: generations, time: 0, pct: 100, finished: false }, pointsObj, S);
+                    finishTraining('✅ 学習完了');
+                }
+            };
+            worker.onerror = (err) => {
+                console.error('Worker error:', err);
+                finishTraining('❌ エラー（コンソール参照）');
+            };
+            worker.postMessage({
+                type: 'start',
+                track: S.track,
+                halfWidth: S.halfWidth,
+                pointsPerLap: S.pointsPerLap,
+                goal: S.goal,
+                popSize,
+                generations,
+            });
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (worker) worker.postMessage({ type: 'stop' });
+            finishTraining('⏹ 停止しました');
+        });
+    </script>
+</body>
+</html>
