@@ -122,8 +122,13 @@ function runGA(cfg) {
       gen, totalGen: GEN,
       fit: r.fitness, time: r.time, finished: r.finished, pct,
       weights: Array.from(best),
+      weightsTop: hof.slice(0, ELITE).map(h => Array.from(h)), // 代表5台
     });
   }
 
-  self.postMessage({ type: 'done', weights: Array.from(hof[0]), fit: hof[0].fit });
+  self.postMessage({
+    type: 'done', fit: hof[0].fit,
+    weights: Array.from(hof[0]),
+    weightsTop: hof.slice(0, ELITE).map(h => Array.from(h)),
+  });
 }

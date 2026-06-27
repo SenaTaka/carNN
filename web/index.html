@@ -268,7 +268,7 @@
                             <button class="btn btn-primary" id="trainBtn">学習をはじめる</button>
                             <button class="btn btn-danger" id="stopBtn" style="display:none">停止</button>
                         </div>
-                        <p class="hint">スタートすると「レース観戦」に切り替わり、世代ごとに賢くなる車が走ります。重い計算はバックグラウンドで実行されUIは固まりません。</p>
+                        <p class="hint">スタートすると「レース観戦」に切り替わり、各世代の上位5台が同じスタートから同時に走ります。重い計算はバックグラウンドで実行されUIは固まりません。</p>
                     </div>
                 </div>
 
@@ -690,15 +690,21 @@
             return (x, y) => [ox + (x - minx) * s, raceCanvas.height - (oy + (y - miny) * s)];
         }
 
-        function drawCar(toScreen, x, y, theta) {
-            const l = 4.2, w = 2.3;
+        // 代表5台の色（Appleシステムカラー）。1位を先頭に。
+        const CAR_COLORS = ['#0a84ff', '#ff9f0a', '#30d158', '#ff375f', '#bf5af2'];
+
+        function drawCar(toScreen, x, y, theta, color, lead) {
+            const l = lead ? 4.6 : 3.6, w = lead ? 2.5 : 2.0;
             const c = Math.cos(theta), s = Math.sin(theta);
             const corners = [[l, 0], [-l * 0.6, w], [-l * 0.6, -w]].map(([lx, ly]) => toScreen(x + lx * c - ly * s, y + lx * s + ly * c));
-            rctx.fillStyle = '#0a84ff';
-            rctx.strokeStyle = '#cce6ff'; rctx.lineWidth = 1.5;
+            rctx.globalAlpha = lead ? 1 : 0.9;
+            rctx.fillStyle = color;
+            rctx.strokeStyle = lead ? '#fff' : 'rgba(255,255,255,.7)';
+            rctx.lineWidth = 1.5;
             rctx.beginPath();
             corners.forEach((p, i) => i === 0 ? rctx.moveTo(p[0], p[1]) : rctx.lineTo(p[0], p[1]));
             rctx.closePath(); rctx.fill(); rctx.stroke();
+            rctx.globalAlpha = 1;
         }
 
         function drawSpark() {
@@ -728,13 +734,15 @@
             rctx.closePath();
         }
 
-        function setRaceBest(pointsObj, S, traj) {
+        // 代表5台分の走行軌跡をまとめてセット（同じスタートから同時に走らせる）
+        function setRaceCars(pointsObj, S, cars) {
             const toScreen = makeTransform(pointsObj);
             const trackWidth = parseFloat(document.getElementById('trackWidth').value);
             const { inner, outer } = calculateNormals(pointsObj, trackWidth);
-            const step = Math.max(1, Math.floor(traj.length / 300));
+            const maxLen = Math.max(...cars.map(c => c.traj.length));
+            const step = Math.max(1, Math.floor(maxLen / 300));
             const keep = raceState ? raceState.frame : 0;
-            raceState = { S, traj, toScreen, inner, outer, step, frame: keep < traj.length ? keep : 0 };
+            raceState = { S, cars, toScreen, inner, outer, step, maxLen, frame: keep < maxLen ? keep : 0 };
         }
 
         function raceLoop() {
@@ -766,26 +774,40 @@
             const a = ts(st.S.goal[0], st.S.goal[1]), b = ts(st.S.goal[2], st.S.goal[3]);
             rctx.beginPath(); rctx.moveTo(a[0], a[1]); rctx.lineTo(b[0], b[1]); rctx.stroke();
 
-            // full path (faint)
-            rctx.strokeStyle = 'rgba(255,159,10,.28)'; rctx.lineWidth = 2;
-            rctx.beginPath();
-            st.traj.forEach((t, i) => { const s = ts(t[0], t[1]); i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); });
-            rctx.stroke();
+            // 各車を後位→先頭の順で描画（1位が最前面）
+            for (let ci = st.cars.length - 1; ci >= 0; ci--) {
+                const car = st.cars[ci];
+                const lead = ci === 0;
+                const cur = Math.min(st.frame, car.traj.length - 1);
+                const tail = Math.max(0, cur - st.step * 36);
+                rctx.globalAlpha = lead ? 0.95 : 0.5;
+                rctx.strokeStyle = car.color; rctx.lineWidth = lead ? 3 : 2;
+                rctx.beginPath();
+                for (let i = tail; i <= cur; i++) { const s = ts(car.traj[i][0], car.traj[i][1]); i === tail ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); }
+                rctx.stroke();
+                rctx.globalAlpha = 1;
+                const t = car.traj[cur];
+                drawCar(ts, t[0], t[1], t[2], car.color, lead);
+            }
 
-            // tail
-            const cur = Math.min(st.frame, st.traj.length - 1);
-            const tail = Math.max(0, cur - st.step * 40);
-            rctx.strokeStyle = '#ff9f0a'; rctx.lineWidth = 3;
-            rctx.beginPath();
-            for (let i = tail; i <= cur; i++) { const s = ts(st.traj[i][0], st.traj[i][1]); i === tail ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); }
-            rctx.stroke();
-
-            const t = st.traj[cur];
-            drawCar(ts, t[0], t[1], t[2]);
             drawSpark();
+            drawLegend(st.cars.length);
 
             st.frame += st.step;
-            if (st.frame >= st.traj.length) st.frame = 0;
+            if (st.frame >= st.maxLen) st.frame = 0;
+        }
+
+        function drawLegend(n) {
+            const lh = 20, w = 116, x0 = raceCanvas.width - w - 14, y0 = 14;
+            rctx.fillStyle = 'rgba(255,255,255,.06)'; rctx.strokeStyle = 'rgba(255,255,255,.12)';
+            roundRect(x0 - 8, y0 - 6, w, lh * n + 12, 8); rctx.fill(); rctx.stroke();
+            rctx.textAlign = 'left'; rctx.textBaseline = 'middle'; rctx.font = '12px sans-serif';
+            for (let i = 0; i < n; i++) {
+                rctx.fillStyle = CAR_COLORS[i % CAR_COLORS.length];
+                rctx.fillRect(x0, y0 + i * lh + 3, 12, 12);
+                rctx.fillStyle = 'rgba(255,255,255,.85)';
+                rctx.fillText(i === 0 ? '1位 (ベスト)' : `${i + 1}位`, x0 + 20, y0 + i * lh + 9);
+            }
         }
 
         function onProgress(m, pointsObj, S) {
@@ -796,9 +818,14 @@
             const st = document.getElementById('trainState');
             st.textContent = m.finished ? '完走' : `走行中 ${m.pct}%`;
             st.classList.toggle('win', !!m.finished);
-            const w = Float64Array.from(m.weights);
-            const r = CARNN.simulateCar(w, S, true);
-            if (r.traj && r.traj.length > 1) setRaceBest(pointsObj, S, r.traj);
+            // 代表5台それぞれの軌跡を再現
+            const tops = m.weightsTop || [m.weights];
+            const cars = [];
+            for (let i = 0; i < tops.length; i++) {
+                const r = CARNN.simulateCar(Float64Array.from(tops[i]), S, true);
+                if (r.traj && r.traj.length > 1) cars.push({ traj: r.traj, color: CAR_COLORS[i % CAR_COLORS.length] });
+            }
+            if (cars.length) setRaceCars(pointsObj, S, cars);
         }
 
         function finishTraining(label) {
