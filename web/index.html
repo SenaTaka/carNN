@@ -25,6 +25,7 @@
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
         html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 
         body {
@@ -32,18 +33,20 @@
             background: var(--bg);
             color: var(--text);
             line-height: 1.5;
-            padding: 24px;
+            padding: 16px 22px;
+            overflow: hidden;
         }
 
-        .app { max-width: 1180px; margin: 0 auto; }
+        .app { max-width: 1180px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; }
 
         /* Topbar */
         .topbar {
+            flex: 0 0 auto;
             display: flex;
             align-items: baseline;
             gap: 14px;
             flex-wrap: wrap;
-            padding: 6px 4px 22px;
+            padding: 2px 4px 14px;
         }
         .brand { display: flex; align-items: baseline; gap: 10px; }
         .logo { font-size: 26px; font-weight: 700; letter-spacing: -0.022em; }
@@ -55,14 +58,17 @@
 
         /* Layout */
         .layout {
+            flex: 1 1 auto;
+            min-height: 0;
             display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 20px;
-            align-items: start;
+            grid-template-columns: 290px 1fr;
+            gap: 18px;
+            align-items: stretch;
         }
         .sidebar {
-            display: flex; flex-direction: column; gap: 16px;
-            position: sticky; top: 24px;
+            display: flex; flex-direction: column; gap: 12px;
+            min-height: 0; overflow-y: auto;
+            padding-right: 4px;
         }
 
         /* Cards */
@@ -137,7 +143,7 @@
         .waypoint-item.selected { background: rgba(0,113,227,.12); color: var(--blue); }
 
         /* Stage */
-        .stage { display: flex; flex-direction: column; gap: 14px; }
+        .stage { min-height: 0; display: flex; flex-direction: column; gap: 12px; }
         .segmented {
             display: inline-flex; align-self: flex-start;
             background: #e9e9eb; border-radius: 11px; padding: 3px; gap: 3px;
@@ -150,21 +156,24 @@
         }
         .seg.active { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.14); font-weight: 600; }
 
+        .panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
         .panel[hidden] { display: none; }
-        .panel-bar { display: flex; align-items: center; gap: 12px; padding: 0 2px 10px; flex-wrap: wrap; }
+        .panel-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 0 2px; flex-wrap: wrap; }
         .muted { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
         .canvas-card {
+            flex: 1 1 auto; min-height: 0;
             background: var(--surface-2); border: 1px solid var(--line);
             border-radius: var(--radius); padding: 10px; box-shadow: var(--shadow);
+            display: flex; align-items: center; justify-content: center;
         }
         #trackCanvas {
-            width: 100%; height: auto; display: block;
+            max-width: 100%; max-height: 100%; width: auto; height: auto; display: block;
             border-radius: 8px; cursor: crosshair; background: #fff;
         }
 
         /* Race HUD */
-        .hud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .hud { flex: 0 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
         .chip {
             background: var(--surface); border: 1px solid var(--line);
             border-radius: 12px; padding: 10px 12px;
@@ -181,10 +190,12 @@
         .chip-value.win { color: var(--green); }
 
         .race-card {
+            flex: 1 1 auto; min-height: 0;
             background: #000; border-radius: var(--radius); padding: 8px;
             box-shadow: var(--shadow); overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
         }
-        #raceCanvas { width: 100%; height: auto; display: block; border-radius: 9px; background: #0b0b0c; }
+        #raceCanvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; border-radius: 9px; background: #0b0b0c; }
 
         .race-empty {
             display: flex; align-items: center; justify-content: center;
@@ -218,11 +229,18 @@
                         <div class="field">
                             <label for="presetSelect">プリセット</label>
                             <select id="presetSelect">
-                                <option value="grandprix">グランプリ</option>
-                                <option value="sweeper">スイーパー</option>
-                                <option value="oval">オーバル</option>
-                                <option value="speedway">スピードウェイ</option>
-                                <option value="kidney">キドニー</option>
+                                <optgroup label="実在サーキット">
+                                    <option value="spa">Spa-Francorchamps</option>
+                                    <option value="silverstone">Silverstone</option>
+                                    <option value="suzuka">Suzuka（鈴鹿・8の字）</option>
+                                </optgroup>
+                                <optgroup label="ベーシック">
+                                    <option value="grandprix">グランプリ</option>
+                                    <option value="sweeper">スイーパー</option>
+                                    <option value="oval">オーバル</option>
+                                    <option value="speedway">スピードウェイ</option>
+                                    <option value="kidney">キドニー</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div class="row"><label for="trackWidth">コース幅 (m)</label>
@@ -610,18 +628,39 @@
                 return [Math.sign(c) * Math.pow(Math.abs(c), 2 / p) * A, Math.sign(s) * Math.pow(Math.abs(s), 2 / p) * B];
             });
         }
+        // 実在サーキットは bacinger/f1-circuits の実測GeoJSON中心線を
+        // 平面投影→正規化→等間隔ダウンサンプリングした正確なウェイポイント。
         const PRESETS = {
+            // Spa-Francorchamps (be-1925)
+            spa: [[-30,124],[-43,150],[-36,147],[-20,139],[-7,127],[17,100],[25,93],[28,83],[30,78],[46,52],[50,41],[73,-40],[72,-45],[68,-48],[67,-51],[69,-66],[66,-70],[34,-91],[30,-87],[29,-84],[32,-80],[47,-69],[42,-51],[35,-16],[32,-10],[29,-7],[17,-6],[9,-8],[3,-14],[-12,-49],[-15,-53],[-21,-55],[-28,-52],[-34,-51],[-39,-55],[-53,-75],[-56,-76],[-67,-70],[-74,-63],[-75,-58],[-73,-50],[-69,-41],[-54,-25],[-27,-10],[-19,-4],[-13,6],[-6,21],[-5,29],[-11,46],[-17,64],[-19,88],[-17,90],[-13,89],[-11,91]],
+            // Silverstone (gb-1948)
+            silverstone: [[11,127],[51,128],[57,123],[63,104],[68,79],[69,51],[75,34],[76,24],[70,5],[78,-9],[78,-20],[71,-26],[59,-35],[11,-121],[-7,-148],[-14,-150],[-23,-148],[-28,-141],[-35,-127],[-45,-116],[-64,-95],[-67,-96],[-75,-101],[-81,-96],[-86,-88],[-89,-78],[-85,-71],[-40,-13],[-32,-8],[-14,-10],[-6,-11],[6,-7],[32,14],[36,13],[42,-3],[47,-7],[50,-4],[54,6],[56,18],[53,26],[-25,96],[-35,97],[-41,92],[-43,77],[-51,73],[-58,77],[-59,82],[-47,108],[-37,118],[-29,123]],
+            // Suzuka (jp-1962) — 立体交差(8の字)を含む
+            suzuka: [[104,-21],[146,-72],[147,-80],[143,-92],[140,-94],[132,-94],[115,-69],[107,-66],[95,-63],[90,-48],[86,-42],[78,-39],[65,-37],[59,-29],[59,-22],[64,-7],[61,-1],[55,3],[44,7],[33,8],[24,5],[13,-4],[-4,-23],[-27,-23],[-28,-20],[-36,21],[-35,27],[-30,40],[-30,43],[-34,44],[-41,33],[-48,23],[-55,17],[-67,13],[-82,14],[-98,20],[-108,28],[-114,35],[-124,58],[-129,63],[-139,63],[-148,59],[-150,51],[-146,45],[-139,38],[-123,26],[-104,16],[-76,6],[-39,-7],[-21,-12],[-15,-11],[-1,-4],[21,16],[28,21],[31,22],[36,18],[42,21],[48,25],[59,24],[70,18]],
             grandprix: polarTrack(24, th => { const r = 110 * (1 + 0.16 * Math.sin(3 * th + 0.6) + 0.10 * Math.cos(2 * th)); return [Math.cos(th) * r, Math.sin(th) * r * 0.88]; }),
             sweeper: polarTrack(20, th => { const r = 112 * (1 + 0.28 * Math.sin(2 * th)); return [Math.cos(th) * r, Math.sin(th) * r]; }),
             oval: polarTrack(16, th => [Math.cos(th) * 145, Math.sin(th) * 82]),
             speedway: superellipse(22, 165, 95, 3.5),
             kidney: polarTrack(20, th => { const r = 105 * (1 + 0.30 * Math.cos(th)); return [Math.cos(th) * r, Math.sin(th) * r]; }),
         };
+        function fitView() {
+            if (waypoints.length < 1) return;
+            let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+            for (const p of waypoints) {
+                minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x);
+                miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y);
+            }
+            const w = (maxx - minx) || 1, h = (maxy - miny) || 1;
+            const margin = 120;
+            zoom = Math.max(0.2, Math.min(5, Math.min((canvas.width - margin) / w, (canvas.height - margin) / h)));
+            panOffset.x = canvas.width / 2 - (minx + maxx) / 2 * zoom;
+            panOffset.y = canvas.height / 2 + (miny + maxy) / 2 * zoom;
+        }
         function applyPreset(name) {
             const wp = PRESETS[name];
             if (!wp) return;
             waypoints = wp.map(p => ({ x: p[0], y: p[1] }));
-            selectedWaypoint = null; updateWaypointList(); draw();
+            selectedWaypoint = null; fitView(); updateWaypointList(); draw();
         }
         document.getElementById('presetSelect').addEventListener('change', (e) => applyPreset(e.target.value));
 
@@ -811,9 +850,9 @@
             finishTraining('停止しました');
         });
 
-        // 起動時に高品質プリセットを適用
-        document.getElementById('presetSelect').value = 'grandprix';
-        applyPreset('grandprix');
+        // 起動時に実在サーキット(Spa)を適用
+        document.getElementById('presetSelect').value = 'spa';
+        applyPreset('spa');
     </script>
 </body>
 </html>
