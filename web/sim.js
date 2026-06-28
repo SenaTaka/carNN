@@ -11,10 +11,10 @@
   // ====== パラメータ ======
   const NHID = 32;   // 隠れ層 24→32（表現力アップ）
   const NOUT = 2;
-  // センサーを7→9本に増やし前方の分解能を上げる（左右対称・前方密）
-  const SENSOR_ANGLES = [-1.4, -0.9, -0.5, -0.2, 0.0, 0.2, 0.5, 0.9, 1.4];
-  const NSENS = SENSOR_ANGLES.length; // 9
-  const NIN = NSENS + 1;              // 10 (センサー9 + 速度)
+  // 11本。前方は密、加えて ±2.0rad(±114°) の広角でヘアピンの内側(横〜やや後方)も検知
+  const SENSOR_ANGLES = [-2.0, -1.3, -0.8, -0.4, -0.15, 0.0, 0.15, 0.4, 0.8, 1.3, 2.0];
+  const NSENS = SENSOR_ANGLES.length; // 11
+  const NIN = NSENS + 1;              // 12 (センサー11 + 速度)
   const N_WEIGHTS = NHID * NIN + NHID + NOUT * NHID + NOUT;
 
   const SIM_STEPS = 30000;
