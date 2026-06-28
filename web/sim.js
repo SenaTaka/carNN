@@ -18,6 +18,7 @@
   const N_WEIGHTS = NHID * NIN + NHID + NOUT * NHID + NOUT;
 
   const SIM_STEPS = 30000;
+  const STALL_STEPS = 2500;  // 前進が止まったら(=スピン/スタック)打ち切る (2.5秒相当)
   const DT = 0.001;
   const MAX_SENSOR_DIST = 60.0;
   const WHEELBASE = 2.5;
@@ -232,7 +233,7 @@
     let x = track[0], y = track[1];
     let theta = Math.atan2(track[2 * 5 + 1] - y, track[2 * 5] - x);
     let v = 0;
-    let lastIdx = 0, totalIdx = 0, finished = false, step = 0;
+    let lastIdx = 0, totalIdx = 0, maxIdx = 0, stall = 0, finished = false, step = 0;
     const gx1 = goal[0], gy1 = goal[1], gx2 = goal[2], gy2 = goal[3];
     const inputs = new Float64Array(NIN);
     const traj = record ? [] : null;
@@ -271,6 +272,10 @@
       else totalIdx += diff;
       lastIdx = curr;
 
+      // 最遠到達進行度を追跡。前進が止まったら(スピン/スタック)打ち切る
+      if (totalIdx > maxIdx) { maxIdx = totalIdx; stall = 0; }
+      else if (++stall > STALL_STEPS) break;
+
       if (totalIdx > pointsPerLap * 0.95) {
         if (isIntersect(prevX, prevY, x, y, gx1, gy1, gx2, gy2)) {
           finished = true;
@@ -283,7 +288,7 @@
     let fitness;
     if (finished) fitness = 20000.0 + (SIM_STEPS - step) * 10.0;
     else {
-      fitness = totalIdx;
+      fitness = maxIdx; // 最遠到達進行度で評価（スピン/逆走は無報酬）
       if (step < 20) fitness = 0.0;
     }
     return { fitness, finished, time: step * DT, traj };
