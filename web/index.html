@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>carNN — AI Racing</title>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --surface: #ffffff;
+            --surface-2: #fbfbfd;
+            --text: #1d1d1f;
+            --muted: #6e6e73;
+            --line: #d2d2d7;
+            --blue: #0071e3;
+            --blue-hover: #0077ed;
+            --green: #34c759;
+            --orange: #ff9500;
+            --red: #ff3b30;
+            --radius: 14px;
+            --shadow: 0 1px 2px rgba(0,0,0,.05), 0 8px 24px rgba(0,0,0,.06);
+            --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+                    "Helvetica Neue", Helvetica, Arial, "Hiragino Kaku Gothic ProN",
+                    "Hiragino Sans", Meiryo, sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
+        html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            padding: 16px 22px;
+            overflow: hidden;
+        }
+
+        .app { max-width: 1180px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; }
+
+        /* Topbar */
+        .topbar {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: baseline;
+            gap: 14px;
+            flex-wrap: wrap;
+            padding: 2px 4px 14px;
+        }
+        .brand { display: flex; align-items: baseline; gap: 10px; }
+        .logo { font-size: 26px; font-weight: 700; letter-spacing: -0.022em; }
+        .tag {
+            font-size: 12px; font-weight: 600; color: var(--blue);
+            background: rgba(0,113,227,.1); padding: 3px 9px; border-radius: 980px;
+        }
+        .lede { color: var(--muted); font-size: 15px; }
+
+        /* Layout */
+        .layout {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: 290px 1fr;
+            gap: 18px;
+            align-items: stretch;
+        }
+        .sidebar {
+            display: flex; flex-direction: column; gap: 12px;
+            min-height: 0; overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .card-head {
+            padding: 14px 16px 2px;
+            font-size: 12px; font-weight: 600; letter-spacing: .04em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .card-body { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+
+        /* Inset rows (Apple settings style) */
+        .row {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        }
+        .row > label { font-size: 14px; color: var(--text); }
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        .field > label { font-size: 13px; color: var(--muted); }
+
+        input[type="number"], select {
+            font-family: inherit; font-size: 14px; color: var(--text);
+            background: var(--surface); border: 1px solid var(--line);
+            border-radius: 9px; padding: 7px 10px;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        input[type="number"] { width: 96px; text-align: right; font-variant-numeric: tabular-nums; }
+        select { width: 100%; }
+        input[type="number"]:focus, select:focus {
+            outline: none; border-color: var(--blue);
+            box-shadow: 0 0 0 3px rgba(0,113,227,.18);
+        }
+
+        /* Buttons */
+        .btn {
+            font-family: inherit; font-size: 15px; font-weight: 500;
+            border: none; border-radius: 11px; padding: 10px 14px;
+            cursor: pointer; width: 100%;
+            transition: background .15s, transform .05s, opacity .15s;
+        }
+        .btn:active { transform: scale(.99); }
+        .btn-primary { background: var(--blue); color: #fff; }
+        .btn-primary:hover { background: var(--blue-hover); }
+        .btn-secondary { background: #e8e8ed; color: var(--text); }
+        .btn-secondary:hover { background: #e0e0e6; }
+        .btn-danger { background: rgba(255,59,48,.1); color: var(--red); }
+        .btn-danger:hover { background: rgba(255,59,48,.16); }
+        .btn-row { display: flex; flex-direction: column; gap: 8px; }
+
+        .hint { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+        .mode-indicator {
+            font-size: 12px; font-weight: 600; color: var(--blue);
+            background: rgba(0,113,227,.1); padding: 4px 11px; border-radius: 980px;
+        }
+        .mode-indicator.move { color: #bf5a00; background: rgba(255,149,0,.16); }
+
+        /* Waypoint list */
+        .waypoint-list {
+            display: flex; flex-direction: column; gap: 2px;
+            max-height: 150px; overflow-y: auto;
+        }
+        .waypoint-item {
+            font-size: 13px; color: var(--muted); padding: 6px 8px;
+            border-radius: 8px; cursor: pointer; font-variant-numeric: tabular-nums;
+        }
+        .waypoint-item:hover { background: var(--bg); }
+        .waypoint-item.selected { background: rgba(0,113,227,.12); color: var(--blue); }
+
+        /* Stage */
+        .stage { min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+        .segmented {
+            display: inline-flex; align-self: flex-start;
+            background: #e9e9eb; border-radius: 11px; padding: 3px; gap: 3px;
+        }
+        .seg {
+            font-family: inherit; font-size: 14px; font-weight: 500; color: var(--text);
+            border: none; background: transparent; padding: 7px 20px;
+            border-radius: 9px; cursor: pointer;
+            transition: background .18s, box-shadow .18s;
+        }
+        .seg.active { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.14); font-weight: 600; }
+
+        .panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+        .panel[hidden] { display: none; }
+        .panel-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 0 2px; flex-wrap: wrap; }
+        .muted { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+        .canvas-card {
+            flex: 1 1 auto; min-height: 0;
+            background: var(--surface-2); border: 1px solid var(--line);
+            border-radius: var(--radius); padding: 10px; box-shadow: var(--shadow);
+            display: flex; align-items: center; justify-content: center;
+        }
+        #trackCanvas {
+            max-width: 100%; max-height: 100%; width: auto; height: auto; display: block;
+            border-radius: 8px; cursor: crosshair; background: #fff;
+        }
+
+        /* Race HUD */
+        .hud { flex: 0 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .chip {
+            background: var(--surface); border: 1px solid var(--line);
+            border-radius: 12px; padding: 10px 12px;
+            display: flex; flex-direction: column; gap: 3px; box-shadow: var(--shadow);
+        }
+        .chip-label {
+            font-size: 11px; font-weight: 600; letter-spacing: .03em;
+            text-transform: uppercase; color: var(--muted);
+        }
+        .chip-value {
+            font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
+            font-variant-numeric: tabular-nums;
+        }
+        .chip-value.win { color: var(--green); }
+
+        .race-card {
+            position: relative;
+            flex: 1 1 auto; min-height: 0;
+            background: #000; border-radius: var(--radius); padding: 8px;
+            box-shadow: var(--shadow); overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #raceCanvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; border-radius: 9px; background: #0b0b0c; }
+
+        .view-toggle {
+            position: absolute; top: 16px; left: 16px; z-index: 2;
+            display: inline-flex; gap: 3px; padding: 3px;
+            background: rgba(20,20,22,.6); backdrop-filter: blur(8px);
+            border-radius: 10px;
+        }
+        .vbtn {
+            font-family: inherit; font-size: 12px; font-weight: 500;
+            color: rgba(255,255,255,.7); background: transparent; border: none;
+            padding: 5px 12px; border-radius: 7px; cursor: pointer;
+        }
+        .vbtn.active { background: rgba(255,255,255,.16); color: #fff; }
+
+        .race-empty {
+            display: flex; align-items: center; justify-content: center;
+            min-height: 320px; color: rgba(255,255,255,.5); font-size: 14px;
+        }
+
+        @media (max-width: 880px) {
+            body { padding: 16px; }
+            .layout { grid-template-columns: 1fr; }
+            .sidebar { position: static; }
+        }
+    </style>
+    <script src="sim.js"></script>
+</head>
+<body>
+    <div class="app">
+        <header class="topbar">
+            <div class="brand">
+                <span class="logo">carNN</span>
+                <span class="tag">AI Racing</span>
+            </div>
+            <p class="lede">コースを描いて、遺伝的アルゴリズムにブラウザ内で運転を学習させる。</p>
+        </header>
+
+        <div class="layout">
+            <!-- Controls -->
+            <aside class="sidebar">
+                <div class="card">
+                    <div class="card-head">コース</div>
+                    <div class="card-body">
+                        <div class="field">
+                            <label for="presetSelect">プリセット</label>
+                            <select id="presetSelect">
+                                <optgroup label="実在サーキット">
+                                    <option value="spa">Spa-Francorchamps</option>
+                                    <option value="silverstone">Silverstone</option>
+                                    <option value="suzuka">Suzuka（鈴鹿・8の字）</option>
+                                </optgroup>
+                                <optgroup label="ベーシック">
+                                    <option value="grandprix">グランプリ</option>
+                                    <option value="sweeper">スイーパー</option>
+                                    <option value="oval">オーバル</option>
+                                    <option value="speedway">スピードウェイ</option>
+                                    <option value="kidney">キドニー</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="row"><label for="trackWidth">コース幅 (m)</label>
+                            <input type="number" id="trackWidth" value="11" min="3" max="25" step="0.5"></div>
+                        <div class="row"><label for="scale">スケール</label>
+                            <input type="number" id="scale" value="1.0" min="0.5" max="5" step="0.1"></div>
+                        <div class="row"><label for="splinePoints">スプライン解像度</label>
+                            <input type="number" id="splinePoints" value="50" min="10" max="100" step="10"></div>
+                        <div class="btn-row">
+                            <button class="btn btn-secondary" id="toggleModeBtn">移動モードに切替</button>
+                            <button class="btn btn-danger" id="clearBtn">すべて削除</button>
+                        </div>
+                        <div class="waypoint-list" id="waypointList"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-head">AI学習</div>
+                    <div class="card-body">
+                        <div class="row"><label for="popSize">集団サイズ</label>
+                            <input type="number" id="popSize" value="40" min="10" max="300" step="10"></div>
+                        <div class="row"><label for="generations">世代数</label>
+                            <input type="number" id="generations" value="60" min="10" max="1000" step="10"></div>
+                        <div class="btn-row">
+                            <button class="btn btn-primary" id="trainBtn">学習をはじめる</button>
+                            <button class="btn btn-danger" id="stopBtn" style="display:none">停止</button>
+                        </div>
+                        <p class="hint">スタートすると「レース観戦」に切り替わり、各世代の上位5台が同じスタートから同時に走ります。重い計算はバックグラウンドで実行されUIは固まりません。</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-head">データ</div>
+                    <div class="card-body">
+                        <div class="btn-row">
+                            <button class="btn btn-secondary" id="exportJsonBtn">JSONを保存</button>
+                            <button class="btn btn-secondary" id="exportPythonBtn">Pythonをコピー</button>
+                            <input type="file" id="loadJson" accept=".json" style="display:none">
+                            <button class="btn btn-secondary" id="loadJsonBtn">ファイルを開く</button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Stage -->
+            <section class="stage">
+                <div class="segmented" role="tablist">
+                    <button class="seg active" data-panel="editor">コース編集</button>
+                    <button class="seg" data-panel="race">レース観戦</button>
+                </div>
+
+                <div class="panel" id="panel-editor">
+                    <div class="panel-bar">
+                        <span class="mode-indicator" id="modeIndicator">追加モード</span>
+                        <span class="muted" id="waypointCount">ポイント 0</span>
+                        <span class="muted" id="trackLength">コース長 0 m</span>
+                        <span class="muted">クリックで追加・ドラッグで移動・右クリックで削除・ホイールでズーム</span>
+                    </div>
+                    <div class="canvas-card">
+                        <canvas id="trackCanvas" width="1000" height="800"></canvas>
+                    </div>
+                </div>
+
+                <div class="panel" id="panel-race" hidden>
+                    <div class="hud">
+                        <div class="chip"><span class="chip-label">状態</span><span class="chip-value" id="trainState">待機中</span></div>
+                        <div class="chip"><span class="chip-label">世代</span><span class="chip-value" id="trainGen">–</span></div>
+                        <div class="chip"><span class="chip-label">Fitness</span><span class="chip-value" id="trainFit">–</span></div>
+                        <div class="chip"><span class="chip-label">タイム</span><span class="chip-value" id="trainTime">–</span></div>
+                    </div>
+                    <div class="race-card">
+                        <div class="view-toggle">
+                            <button class="vbtn active" data-view="follow">車に追従</button>
+                            <button class="vbtn" data-view="overview">全体</button>
+                        </div>
+                        <canvas id="raceCanvas" width="1000" height="600"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // コースエディタ
+        // ==========================================
+        const canvas = document.getElementById('trackCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let waypoints = [];
+        let mode = 'add';
+        let selectedWaypoint = null;
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        let panOffset = { x: canvas.width / 2, y: canvas.height / 2 };
+        let zoom = 1.0;
+
+        // CSS で縮小表示されたキャンバス上のマウス座標を内部ピクセル座標へ変換
+        function canvasPos(e) {
+            const r = canvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - r.left) * (canvas.width / r.width),
+                y: (e.clientY - r.top) * (canvas.height / r.height),
+            };
+        }
+
+        function catmullRomSpline(P0, P1, P2, P3, nPoints) {
+            const points = [];
+            for (let i = 0; i < nPoints; i++) {
+                const t = i / (nPoints - 1);
+                const t2 = t * t, t3 = t2 * t;
+                const c0 = -0.5 * t3 + t2 - 0.5 * t;
+                const c1 = 1.5 * t3 - 2.5 * t2 + 1.0;
+                const c2 = -1.5 * t3 + 2.0 * t2 + 0.5 * t;
+                const c3 = 0.5 * t3 - 0.5 * t2;
+                points.push({
+                    x: c0 * P0.x + c1 * P1.x + c2 * P2.x + c3 * P3.x,
+                    y: c0 * P0.y + c1 * P1.y + c2 * P2.y + c3 * P3.y,
+                });
+            }
+            return points;
+        }
+
+        function generateTrack() {
+            if (waypoints.length < 3) return [];
+            const scale = parseFloat(document.getElementById('scale').value);
+            const splinePoints = parseInt(document.getElementById('splinePoints').value);
+            const sw = waypoints.map(p => ({ x: p.x * scale, y: p.y * scale }));
+            const track = [];
+            const n = sw.length;
+            for (let i = 0; i < n; i++) {
+                const seg = catmullRomSpline(sw[(i - 1 + n) % n], sw[i], sw[(i + 1) % n], sw[(i + 2) % n], splinePoints);
+                track.push(...seg);
+            }
+            return track;
+        }
+
+        function calculateNormals(track, halfWidth) {
+            if (track.length < 2) return { inner: [], outer: [] };
+            const normals = [];
+            for (let i = 0; i < track.length; i++) {
+                const prev = track[(i - 1 + track.length) % track.length];
+                const next = track[(i + 1) % track.length];
+                const dx = next.x - prev.x, dy = next.y - prev.y;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                normals.push({ x: -dy / len, y: dx / len });
+            }
+            const inner = track.map((p, i) => ({ x: p.x + normals[i].x * halfWidth, y: p.y + normals[i].y * halfWidth }));
+            const outer = track.map((p, i) => ({ x: p.x - normals[i].x * halfWidth, y: p.y - normals[i].y * halfWidth }));
+            return { inner, outer };
+        }
+
+        function worldToScreen(wx, wy) {
+            return { x: wx * zoom + panOffset.x, y: -wy * zoom + panOffset.y };
+        }
+        function screenToWorld(sx, sy) {
+            return { x: (sx - panOffset.x) / zoom, y: -(sy - panOffset.y) / zoom };
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // grid
+            ctx.strokeStyle = '#ececef';
+            ctx.lineWidth = 1;
+            const gridSize = 50 * zoom;
+            for (let x = panOffset.x % gridSize; x < canvas.width; x += gridSize) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for (let y = panOffset.y % gridSize; y < canvas.height; y += gridSize) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            // origin
+            const origin = worldToScreen(0, 0);
+            ctx.strokeStyle = '#c7c7cc'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(origin.x - 8, origin.y); ctx.lineTo(origin.x + 8, origin.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(origin.x, origin.y - 8); ctx.lineTo(origin.x, origin.y + 8); ctx.stroke();
+
+            if (waypoints.length >= 3) {
+                const track = generateTrack();
+                const trackWidth = parseFloat(document.getElementById('trackWidth').value);
+
+                // 中心線を太線でストローク（衝突判定=中心線からの距離 と一致。鋭角でも縁線が破綻しない）
+                const roadPx = 2 * trackWidth * zoom;
+                ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+                const strokeCenter = (px, color) => {
+                    ctx.strokeStyle = color; ctx.lineWidth = px;
+                    ctx.beginPath();
+                    track.forEach((p, i) => { const s = worldToScreen(p.x, p.y); i === 0 ? ctx.moveTo(s.x, s.y) : ctx.lineTo(s.x, s.y); });
+                    ctx.closePath(); ctx.stroke();
+                };
+                strokeCenter(roadPx + 4, '#c7c7cc'); // 縁(ケーシング)
+                strokeCenter(roadPx, '#e8e8ed');     // 路面
+
+                // ゴールライン（始点の法線方向）
+                const t0 = track[0], tp = track[track.length - 1], tn = track[1];
+                let gnx = -(tn.y - tp.y), gny = (tn.x - tp.x);
+                const gl = Math.hypot(gnx, gny) || 1; gnx = gnx / gl * trackWidth; gny = gny / gl * trackWidth;
+                const ga = worldToScreen(t0.x + gnx, t0.y + gny), gb = worldToScreen(t0.x - gnx, t0.y - gny);
+                ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(ga.x, ga.y); ctx.lineTo(gb.x, gb.y); ctx.stroke();
+
+                const trackLength = track.reduce((sum, p, i) => {
+                    if (i === 0) return 0;
+                    const prev = track[i - 1];
+                    return sum + Math.hypot(p.x - prev.x, p.y - prev.y);
+                }, 0);
+                document.getElementById('trackLength').textContent = `コース長 ${trackLength.toFixed(0)} m`;
+            }
+
+            // waypoint connections
+            if (waypoints.length > 1) {
+                ctx.strokeStyle = 'rgba(0,113,227,.35)'; ctx.lineWidth = 1.5;
+                ctx.setLineDash([5, 5]); ctx.beginPath();
+                waypoints.forEach((p, i) => { const s = worldToScreen(p.x, p.y); i === 0 ? ctx.moveTo(s.x, s.y) : ctx.lineTo(s.x, s.y); });
+                ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+            }
+
+            // waypoints
+            waypoints.forEach((p, i) => {
+                const s = worldToScreen(p.x, p.y);
+                const sel = selectedWaypoint === i;
+                ctx.fillStyle = sel ? '#ff9500' : '#0071e3';
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(s.x, s.y, sel ? 9 : 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.font = '600 11px -apple-system, Helvetica, sans-serif';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(i.toString(), s.x, s.y);
+            });
+
+            document.getElementById('waypointCount').textContent = `ポイント ${waypoints.length}`;
+        }
+
+        function updateWaypointList() {
+            const list = document.getElementById('waypointList');
+            list.innerHTML = '';
+            waypoints.forEach((p, i) => {
+                const item = document.createElement('div');
+                item.className = 'waypoint-item' + (selectedWaypoint === i ? ' selected' : '');
+                item.textContent = `#${i}  (${p.x.toFixed(0)}, ${p.y.toFixed(0)})`;
+                item.onclick = () => { selectedWaypoint = i; updateWaypointList(); draw(); };
+                list.appendChild(item);
+            });
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const { x: sx, y: sy } = canvasPos(e);
+            const world = screenToWorld(sx, sy);
+            if (e.button === 0) {
+                if (mode === 'add') {
+                    waypoints.push({ x: Math.round(world.x), y: Math.round(world.y) });
+                    selectedWaypoint = waypoints.length - 1;
+                    updateWaypointList(); draw();
+                } else if (mode === 'move') {
+                    for (let i = 0; i < waypoints.length; i++) {
+                        const s = worldToScreen(waypoints[i].x, waypoints[i].y);
+                        if (Math.hypot(s.x - sx, s.y - sy) < 16) {
+                            isDragging = true; selectedWaypoint = i;
+                            dragOffset = { x: world.x - waypoints[i].x, y: world.y - waypoints[i].y };
+                            updateWaypointList(); draw(); break;
+                        }
+                    }
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging && selectedWaypoint !== null) {
+                const { x: sx, y: sy } = canvasPos(e);
+                const world = screenToWorld(sx, sy);
+                waypoints[selectedWaypoint].x = Math.round(world.x - dragOffset.x);
+                waypoints[selectedWaypoint].y = Math.round(world.y - dragOffset.y);
+                updateWaypointList(); draw();
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => { isDragging = false; });
+
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const { x: sx, y: sy } = canvasPos(e);
+            for (let i = 0; i < waypoints.length; i++) {
+                const s = worldToScreen(waypoints[i].x, waypoints[i].y);
+                if (Math.hypot(s.x - sx, s.y - sy) < 16) {
+                    waypoints.splice(i, 1); selectedWaypoint = null;
+                    updateWaypointList(); draw(); break;
+                }
+            }
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            zoom *= e.deltaY > 0 ? 0.9 : 1.1;
+            zoom = Math.max(0.1, Math.min(5, zoom));
+            draw();
+        }, { passive: false });
+
+        document.getElementById('toggleModeBtn').addEventListener('click', () => {
+            mode = mode === 'add' ? 'move' : 'add';
+            const ind = document.getElementById('modeIndicator');
+            const btn = document.getElementById('toggleModeBtn');
+            if (mode === 'add') {
+                ind.textContent = '追加モード'; ind.className = 'mode-indicator';
+                btn.textContent = '移動モードに切替';
+            } else {
+                ind.textContent = '移動モード'; ind.className = 'mode-indicator move';
+                btn.textContent = '追加モードに切替';
+            }
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            if (confirm('すべてのウェイポイントを削除しますか？')) {
+                waypoints = []; selectedWaypoint = null; updateWaypointList(); draw();
+            }
+        });
+
+        document.getElementById('trackWidth').addEventListener('input', draw);
+        document.getElementById('scale').addEventListener('input', draw);
+        document.getElementById('splinePoints').addEventListener('input', draw);
+
+        document.getElementById('exportJsonBtn').addEventListener('click', () => {
+            const data = {
+                waypoints: waypoints.map(p => [p.x, p.y]),
+                trackWidth: parseFloat(document.getElementById('trackWidth').value),
+                scale: parseFloat(document.getElementById('scale').value),
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'track.json'; a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        document.getElementById('exportPythonBtn').addEventListener('click', () => {
+            const code = `# Generated track waypoints\nbase_waypoints = np.array([\n${waypoints.map(p => `    [${p.x}, ${p.y}]`).join(',\n')}\n])\nscale = ${document.getElementById('scale').value}\ntrack_width = ${document.getElementById('trackWidth').value}\n`;
+            navigator.clipboard.writeText(code).then(() => {
+                alert('Pythonコードをコピーしました。g_save.py の generate_complex_track() に貼り付けてください。');
+            }).catch(() => alert('クリップボードへのコピーに失敗しました。'));
+        });
+
+        document.getElementById('loadJsonBtn').addEventListener('click', () => document.getElementById('loadJson').click());
+        document.getElementById('loadJson').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    waypoints = data.waypoints.map(p => ({ x: p[0], y: p[1] }));
+                    document.getElementById('trackWidth').value = data.trackWidth || 7.5;
+                    document.getElementById('scale').value = data.scale || 1.0;
+                    selectedWaypoint = null; updateWaypointList(); draw();
+                } catch (err) {
+                    alert('JSONの読み込みに失敗しました: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        updateWaypointList();
+        draw();
+
+        // ==========================================
+        // セグメントコントロール（編集 / レース）
+        // ==========================================
+        function showPanel(name) {
+            document.querySelectorAll('.seg').forEach(s => s.classList.toggle('active', s.dataset.panel === name));
+            document.getElementById('panel-editor').hidden = name !== 'editor';
+            document.getElementById('panel-race').hidden = name !== 'race';
+        }
+        document.querySelectorAll('.seg').forEach(s => s.addEventListener('click', () => showPanel(s.dataset.panel)));
+
+        // ==========================================
+        // プリセットコース（自己交差しない滑らかな閉ループ）
+        // ==========================================
+        function polarTrack(n, fn) {
+            const pts = [];
+            for (let i = 0; i < n; i++) {
+                const th = (i / n) * Math.PI * 2;
+                const [x, y] = fn(th);
+                pts.push([Math.round(x), Math.round(y)]);
+            }
+            return pts;
+        }
+        function superellipse(n, A, B, p) {
+            return polarTrack(n, th => {
+                const c = Math.cos(th), s = Math.sin(th);
+                return [Math.sign(c) * Math.pow(Math.abs(c), 2 / p) * A, Math.sign(s) * Math.pow(Math.abs(s), 2 / p) * B];
+            });
+        }
+        // 実在サーキットは bacinger/f1-circuits の実測GeoJSON中心線を
+        // 平面投影→正規化→等間隔ダウンサンプリングした正確なウェイポイント。
+        const PRESETS = {
+            // Spa-Francorchamps (be-1925) — 弧長等間隔リサンプリングで滑らか化
+            spa: [[-30,124],[-37,137],[-43,149],[-31,145],[-19,138],[-8,129],[1,118],[10,107],[21,98],[27,87],[32,74],[40,62],[47,50],[51,36],[55,23],[59,10],[63,-4],[67,-17],[71,-31],[72,-44],[67,-56],[67,-69],[56,-77],[44,-85],[32,-90],[34,-79],[46,-71],[44,-57],[40,-44],[37,-30],[35,-16],[26,-6],[12,-6],[2,-15],[-3,-28],[-9,-41],[-15,-54],[-28,-52],[-40,-56],[-47,-68],[-57,-76],[-69,-69],[-75,-57],[-70,-44],[-62,-33],[-51,-23],[-39,-16],[-27,-10],[-16,0],[-10,12],[-5,25],[-8,39],[-13,52],[-17,65],[-18,79],[-14,89],[-16,100],[-23,112]],
+            // Silverstone (gb-1948)
+            silverstone: [[11,127],[29,129],[47,130],[59,119],[64,101],[67,84],[68,66],[69,48],[76,32],[72,15],[73,-2],[79,-18],[66,-29],[54,-42],[46,-58],[38,-73],[29,-89],[21,-105],[12,-120],[3,-135],[-9,-148],[-25,-146],[-34,-130],[-45,-116],[-56,-103],[-70,-98],[-83,-93],[-88,-76],[-78,-62],[-67,-48],[-56,-34],[-45,-20],[-33,-8],[-15,-10],[3,-9],[17,2],[31,13],[40,2],[51,-2],[55,15],[48,30],[35,42],[22,54],[9,66],[-4,78],[-17,90],[-33,98],[-42,85],[-51,73],[-58,86],[-50,102],[-40,116],[-24,124],[-6,126]],
+            // Suzuka (jp-1962) — 立体交差(8の字)。シケインのカスプを弧長等間隔化で解消
+            suzuka: [[104,-21],[112,-31],[121,-41],[129,-52],[138,-62],[146,-73],[146,-86],[137,-95],[127,-88],[120,-77],[112,-67],[98,-65],[91,-54],[86,-42],[74,-39],[62,-34],[59,-22],[64,-9],[57,2],[45,7],[32,8],[20,2],[11,-7],[2,-18],[-9,-23],[-22,-24],[-29,-15],[-32,-2],[-34,11],[-36,24],[-31,37],[-36,42],[-43,31],[-50,20],[-62,14],[-75,13],[-88,16],[-100,22],[-110,30],[-117,42],[-122,54],[-130,63],[-144,62],[-150,52],[-142,41],[-132,33],[-121,25],[-109,19],[-97,13],[-84,9],[-72,4],[-59,0],[-47,-4],[-34,-9],[-21,-12],[-9,-8],[3,-1],[12,8],[22,17],[33,20],[44,23],[57,25],[69,19],[78,10],[87,0],[95,-11]],
+            grandprix: polarTrack(24, th => { const r = 110 * (1 + 0.16 * Math.sin(3 * th + 0.6) + 0.10 * Math.cos(2 * th)); return [Math.cos(th) * r, Math.sin(th) * r * 0.88]; }),
+            sweeper: polarTrack(20, th => { const r = 112 * (1 + 0.28 * Math.sin(2 * th)); return [Math.cos(th) * r, Math.sin(th) * r]; }),
+            oval: polarTrack(16, th => [Math.cos(th) * 145, Math.sin(th) * 82]),
+            speedway: superellipse(22, 165, 95, 3.5),
+            kidney: polarTrack(20, th => { const r = 105 * (1 + 0.30 * Math.cos(th)); return [Math.cos(th) * r, Math.sin(th) * r]; }),
+        };
+        function fitView() {
+            if (waypoints.length < 1) return;
+            let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+            for (const p of waypoints) {
+                minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x);
+                miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y);
+            }
+            const w = (maxx - minx) || 1, h = (maxy - miny) || 1;
+            const margin = 120;
+            zoom = Math.max(0.2, Math.min(5, Math.min((canvas.width - margin) / w, (canvas.height - margin) / h)));
+            panOffset.x = canvas.width / 2 - (minx + maxx) / 2 * zoom;
+            panOffset.y = canvas.height / 2 + (miny + maxy) / 2 * zoom;
+        }
+        // プリセット別の推奨コース幅(halfWidth)。別区間が干渉しない範囲で広めに。
+        // （干渉解析: Spa 23.4m / Silverstone 16.8m / 鈴鹿は立体交差のみ）
+        const PRESET_WIDTH = { spa: 11, silverstone: 8, suzuka: 10, grandprix: 14, sweeper: 14, oval: 14, speedway: 14, kidney: 14 };
+        function applyPreset(name) {
+            const wp = PRESETS[name];
+            if (!wp) return;
+            waypoints = wp.map(p => ({ x: p[0], y: p[1] }));
+            if (PRESET_WIDTH[name]) document.getElementById('trackWidth').value = PRESET_WIDTH[name];
+            selectedWaypoint = null; fitView(); updateWaypointList(); draw();
+        }
+        document.getElementById('presetSelect').addEventListener('change', (e) => applyPreset(e.target.value));
+
+        // ==========================================
+        // AI学習（Web Worker + sim.js）
+        // ==========================================
+        const raceCanvas = document.getElementById('raceCanvas');
+        const rctx = raceCanvas.getContext('2d');
+        const trainBtn = document.getElementById('trainBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        let worker = null;
+        let raceAnim = null;
+        let fitHistory = [];
+        let raceState = null;
+
+        let viewMode = 'follow';   // 'follow' = 車に追従ズーム / 'overview' = 全体
+        let camX = 0, camY = 0, camInit = false;
+
+        function makeTransform(points) {
+            let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+            for (const p of points) {
+                if (p.x < minx) minx = p.x; if (p.x > maxx) maxx = p.x;
+                if (p.y < miny) miny = p.y; if (p.y > maxy) maxy = p.y;
+            }
+            const pad = 44;
+            const w = (maxx - minx) || 1, h = (maxy - miny) || 1;
+            const s = Math.min((raceCanvas.width - 2 * pad) / w, (raceCanvas.height - 2 * pad) / h);
+            const ox = pad + (raceCanvas.width - 2 * pad - w * s) / 2;
+            const oy = pad + (raceCanvas.height - 2 * pad - h * s) / 2;
+            return { toScreen: (x, y) => [ox + (x - minx) * s, raceCanvas.height - (oy + (y - miny) * s)], scale: s };
+        }
+
+        // 追従カメラ：リーダーの現在地を中心に固定ズームで表示する変換
+        function followTransform(cx, cy) {
+            const viewHalf = 110; // 画面に映る半径(m)。5台の集団が入る程度に広め
+            const s = Math.min(raceCanvas.width, raceCanvas.height) / (2 * viewHalf);
+            return { toScreen: (x, y) => [raceCanvas.width / 2 + (x - cx) * s, raceCanvas.height / 2 - (y - cy) * s], scale: s };
+        }
+
+        // 代表5台の色（Appleシステムカラー）。1位を先頭に。
+        const CAR_COLORS = ['#0a84ff', '#ff9f0a', '#30d158', '#ff375f', '#bf5af2'];
+
+        function drawCar(toScreen, x, y, theta, color, lead, rank) {
+            const l = lead ? 6.5 : 5.2, w = lead ? 3.6 : 3.0; // 視認しやすいよう大きめ
+            const c = Math.cos(theta), s = Math.sin(theta);
+            const corners = [[l, 0], [-l * 0.6, w], [-l * 0.6, -w]].map(([lx, ly]) => toScreen(x + lx * c - ly * s, y + lx * s + ly * c));
+            rctx.globalAlpha = 1;
+            rctx.fillStyle = color;
+            rctx.strokeStyle = '#fff'; rctx.lineWidth = lead ? 2 : 1.5;
+            rctx.beginPath();
+            corners.forEach((p, i) => i === 0 ? rctx.moveTo(p[0], p[1]) : rctx.lineTo(p[0], p[1]));
+            rctx.closePath(); rctx.fill(); rctx.stroke();
+            // ランク番号
+            const cp = toScreen(x, y);
+            rctx.fillStyle = '#fff';
+            rctx.font = `700 ${lead ? 13 : 11}px -apple-system, sans-serif`;
+            rctx.textAlign = 'center'; rctx.textBaseline = 'middle';
+            rctx.fillText(String(rank + 1), cp[0], cp[1]);
+        }
+
+        function drawSpark() {
+            if (fitHistory.length < 2) return;
+            const w = 190, h = 54, x0 = 14, y0 = 14;
+            rctx.fillStyle = 'rgba(255,255,255,.06)'; rctx.strokeStyle = 'rgba(255,255,255,.12)';
+            roundRect(x0, y0, w, h, 8); rctx.fill(); rctx.stroke();
+            const mx = Math.max(...fitHistory), mn = Math.min(...fitHistory);
+            const rng = (mx - mn) || 1;
+            rctx.strokeStyle = '#0a84ff'; rctx.lineWidth = 1.5; rctx.beginPath();
+            fitHistory.forEach((f, i) => {
+                const px = x0 + 8 + (i / (fitHistory.length - 1)) * (w - 16);
+                const py = y0 + h - 8 - ((f - mn) / rng) * (h - 16);
+                i === 0 ? rctx.moveTo(px, py) : rctx.lineTo(px, py);
+            });
+            rctx.stroke();
+            rctx.fillStyle = 'rgba(255,255,255,.6)'; rctx.font = '11px sans-serif';
+            rctx.fillText('Fitness', x0 + 8, y0 + 15);
+        }
+        function roundRect(x, y, w, h, r) {
+            rctx.beginPath();
+            rctx.moveTo(x + r, y);
+            rctx.arcTo(x + w, y, x + w, y + h, r);
+            rctx.arcTo(x + w, y + h, x, y + h, r);
+            rctx.arcTo(x, y + h, x, y, r);
+            rctx.arcTo(x, y, x + w, y, r);
+            rctx.closePath();
+        }
+
+        // 代表5台分の走行軌跡をまとめてセット（同じスタートから同時に走らせる）
+        function setRaceCars(pointsObj, S, cars) {
+            const fit = makeTransform(pointsObj);
+            const maxLen = Math.max(...cars.map(c => c.traj.length));
+            const step = Math.max(1, Math.floor(maxLen / 300));
+            const keep = raceState ? raceState.frame : 0;
+            raceState = { S, cars, center: pointsObj, overview: fit, step, maxLen, frame: keep < maxLen ? keep : 0 };
+        }
+
+        function raceLoop() {
+            raceAnim = requestAnimationFrame(raceLoop);
+            const st = raceState;
+            if (!st) return;
+
+            // カメラ（変換）を決定
+            let view = st.overview;
+            const lead = st.cars[0];
+            const leadCur = Math.min(st.frame, lead.traj.length - 1);
+            if (viewMode === 'follow' && lead) {
+                const tx = lead.traj[leadCur][0], ty = lead.traj[leadCur][1];
+                if (!camInit) { camX = tx; camY = ty; camInit = true; }
+                camX += (tx - camX) * 0.12; camY += (ty - camY) * 0.12; // スムーズ追従
+                view = followTransform(camX, camY);
+            }
+            const ts = view.toScreen, scale = view.scale;
+
+            rctx.fillStyle = '#0b0b0c';
+            rctx.fillRect(0, 0, raceCanvas.width, raceCanvas.height);
+
+            // 路面：中心線を太線でストローク（縁線の自己交差アーティファクトが出ない）
+            const roadPx = 2 * st.S.halfWidth * scale;
+            rctx.lineJoin = 'round'; rctx.lineCap = 'round';
+            const strokeCenter = (px, color) => {
+                rctx.strokeStyle = color; rctx.lineWidth = px;
+                rctx.beginPath();
+                st.center.forEach((p, i) => { const s = ts(p.x, p.y); i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); });
+                rctx.closePath(); rctx.stroke();
+            };
+            strokeCenter(roadPx + Math.max(4, scale * 1.2), 'rgba(255,255,255,.85)'); // 縁(白)
+            strokeCenter(roadPx, '#3a3a3c');                                          // 路面
+
+            // ゴールライン
+            rctx.strokeStyle = '#ff453a'; rctx.lineWidth = 3;
+            const a = ts(st.S.goal[0], st.S.goal[1]), b = ts(st.S.goal[2], st.S.goal[3]);
+            rctx.beginPath(); rctx.moveTo(a[0], a[1]); rctx.lineTo(b[0], b[1]); rctx.stroke();
+
+            // 各車を後位→先頭の順で描画（1位が最前面）
+            for (let ci = st.cars.length - 1; ci >= 0; ci--) {
+                const car = st.cars[ci];
+                const isLead = ci === 0;
+                const cur = Math.min(st.frame, car.traj.length - 1);
+                const tail = Math.max(0, cur - st.step * 36);
+                rctx.globalAlpha = isLead ? 0.95 : 0.5;
+                rctx.strokeStyle = car.color; rctx.lineWidth = isLead ? 3 : 2;
+                rctx.beginPath();
+                for (let i = tail; i <= cur; i++) { const s = ts(car.traj[i][0], car.traj[i][1]); i === tail ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); }
+                rctx.stroke();
+                rctx.globalAlpha = 1;
+                const t = car.traj[cur];
+                drawCar(ts, t[0], t[1], t[2], car.color, isLead, ci);
+            }
+
+            drawSpark();
+            drawLegend(st.cars.length);
+
+            st.frame += st.step;
+            if (st.frame >= st.maxLen) { st.frame = 0; camInit = false; }
+        }
+
+        function drawLegend(n) {
+            const lh = 20, w = 116, x0 = raceCanvas.width - w - 14, y0 = 14;
+            rctx.fillStyle = 'rgba(255,255,255,.06)'; rctx.strokeStyle = 'rgba(255,255,255,.12)';
+            roundRect(x0 - 8, y0 - 6, w, lh * n + 12, 8); rctx.fill(); rctx.stroke();
+            rctx.textAlign = 'left'; rctx.textBaseline = 'middle'; rctx.font = '12px sans-serif';
+            for (let i = 0; i < n; i++) {
+                rctx.fillStyle = CAR_COLORS[i % CAR_COLORS.length];
+                rctx.fillRect(x0, y0 + i * lh + 3, 12, 12);
+                rctx.fillStyle = 'rgba(255,255,255,.85)';
+                rctx.fillText(i === 0 ? '1位 (ベスト)' : `${i + 1}位`, x0 + 20, y0 + i * lh + 9);
+            }
+        }
+
+        function onProgress(m, pointsObj, S) {
+            fitHistory.push(m.fit);
+            document.getElementById('trainGen').textContent = `${m.gen} / ${m.totalGen}`;
+            document.getElementById('trainFit').textContent = m.fit.toFixed(0);
+            document.getElementById('trainTime').textContent = `${m.time.toFixed(2)} s`;
+            const st = document.getElementById('trainState');
+            st.textContent = m.finished ? '完走' : `走行中 ${m.pct}%`;
+            st.classList.toggle('win', !!m.finished);
+            // 代表5台それぞれの軌跡を再現
+            const tops = m.weightsTop || [m.weights];
+            const cars = [];
+            for (let i = 0; i < tops.length; i++) {
+                const r = CARNN.simulateCar(Float64Array.from(tops[i]), S, true);
+                if (r.traj && r.traj.length > 1) cars.push({ traj: r.traj, color: CAR_COLORS[i % CAR_COLORS.length] });
+            }
+            if (cars.length) setRaceCars(pointsObj, S, cars);
+        }
+
+        function finishTraining(label) {
+            trainBtn.style.display = 'block';
+            stopBtn.style.display = 'none';
+            document.getElementById('trainState').textContent = label;
+            if (worker) { worker.terminate(); worker = null; }
+        }
+
+        trainBtn.addEventListener('click', () => {
+            if (waypoints.length < 3) { alert('ウェイポイントを3つ以上配置してください。'); return; }
+            const pointsObj = generateTrack();
+            const trackWidth = parseFloat(document.getElementById('trackWidth').value);
+            const S = CARNN.buildSim(pointsObj, trackWidth);
+            const popSize = parseInt(document.getElementById('popSize').value);
+            const generations = parseInt(document.getElementById('generations').value);
+
+            fitHistory = [];
+            raceState = null;
+            camInit = false;
+            document.getElementById('trainState').textContent = '計算中…';
+            document.getElementById('trainState').classList.remove('win');
+            document.getElementById('trainGen').textContent = `0 / ${generations}`;
+            trainBtn.style.display = 'none';
+            stopBtn.style.display = 'block';
+            showPanel('race'); // 自動でレース観戦へ
+            if (raceAnim) cancelAnimationFrame(raceAnim);
+            raceLoop();
+
+            worker = new Worker('worker.js');
+            worker.onmessage = (e) => {
+                const m = e.data;
+                if (m.type === 'progress') {
+                    onProgress(m, pointsObj, S);
+                } else if (m.type === 'done') {
+                    onProgress({ ...m, gen: generations, totalGen: generations, time: 0, pct: 100, finished: false }, pointsObj, S);
+                    finishTraining('学習完了');
+                }
+            };
+            worker.onerror = (err) => { console.error('Worker error:', err); finishTraining('エラー'); };
+            worker.postMessage({
+                type: 'start',
+                track: S.track, halfWidth: S.halfWidth, pointsPerLap: S.pointsPerLap, goal: S.goal,
+                popSize, generations,
+            });
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (worker) worker.postMessage({ type: 'stop' });
+            finishTraining('停止しました');
+        });
+
+        // 視点切替（車に追従 / 全体）
+        document.querySelectorAll('.vbtn').forEach(btn => btn.addEventListener('click', () => {
+            viewMode = btn.dataset.view;
+            document.querySelectorAll('.vbtn').forEach(b => b.classList.toggle('active', b === btn));
+            camInit = false;
+        }));
+
+        // 起動時に実在サーキット(Spa)を適用
+        document.getElementById('presetSelect').value = 'spa';
+        applyPreset('spa');
+    </script>
+</body>
+</html>
