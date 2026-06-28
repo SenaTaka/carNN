@@ -21,8 +21,10 @@
   const MAX_SENSOR_DIST = 60.0;
   const WHEELBASE = 2.5;
   const MAX_SPEED = (300 * 1000) / 3600; // m/s
-  const MAX_STEER = 0.6;
+  const MAX_STEER = 0.9;          // 最大舵角(rad)。最小回転半径 = L/tan(MAX_STEER) ≈ 2.0 m
   const THROTTLE_POWER = 10;
+  const GRIP_ACCEL = 28.0;        // 最大横加速度(m/s^2) ≈ 2.85G。タイヤ/ダウンフォースのグリップ限界
+  const R_MIN = WHEELBASE / Math.tan(MAX_STEER); // 最小回転半径(m)
 
   // ====== ユーティリティ ======
   // Box-Muller 法による正規乱数
@@ -248,7 +250,13 @@
       if (throttle > 0) v += throttle * THROTTLE_POWER * DT;
       else v += throttle * THROTTLE_POWER * 2.0 * DT;
       v = Math.max(-5.0, Math.min(MAX_SPEED, v));
-      theta += (v * Math.tan(steer) / WHEELBASE) * DT;
+      // ヨーレート（運動学的）。ただし横加速度 a = v*ω を GRIP_ACCEL で頭打ちにする
+      // → 高速ではタイトに曲がれず（アンダーステア）、コーナーでは減速が必要になる
+      let omega = v * Math.tan(steer) / WHEELBASE;
+      const omegaMax = GRIP_ACCEL / Math.max(Math.abs(v), 1.0);
+      if (omega > omegaMax) omega = omegaMax;
+      else if (omega < -omegaMax) omega = -omegaMax;
+      theta += omega * DT;
       x += v * Math.cos(theta) * DT;
       y += v * Math.sin(theta) * DT;
 
@@ -306,6 +314,7 @@
   const CARNN = {
     NHID, NOUT, NSENS, NIN, N_WEIGHTS, SENSOR_ANGLES,
     SIM_STEPS, DT, MAX_SENSOR_DIST, WHEELBASE, MAX_SPEED, MAX_STEER, THROTTLE_POWER,
+    GRIP_ACCEL, R_MIN,
     gaussian, distanceToTrack, getNearestIdx, isIntersect, sense, nnForward,
     simulateCar, buildSim, attachGrid,
   };

@@ -190,12 +190,26 @@
         .chip-value.win { color: var(--green); }
 
         .race-card {
+            position: relative;
             flex: 1 1 auto; min-height: 0;
             background: #000; border-radius: var(--radius); padding: 8px;
             box-shadow: var(--shadow); overflow: hidden;
             display: flex; align-items: center; justify-content: center;
         }
         #raceCanvas { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; border-radius: 9px; background: #0b0b0c; }
+
+        .view-toggle {
+            position: absolute; top: 16px; left: 16px; z-index: 2;
+            display: inline-flex; gap: 3px; padding: 3px;
+            background: rgba(20,20,22,.6); backdrop-filter: blur(8px);
+            border-radius: 10px;
+        }
+        .vbtn {
+            font-family: inherit; font-size: 12px; font-weight: 500;
+            color: rgba(255,255,255,.7); background: transparent; border: none;
+            padding: 5px 12px; border-radius: 7px; cursor: pointer;
+        }
+        .vbtn.active { background: rgba(255,255,255,.16); color: #fff; }
 
         .race-empty {
             display: flex; align-items: center; justify-content: center;
@@ -312,6 +326,10 @@
                         <div class="chip"><span class="chip-label">タイム</span><span class="chip-value" id="trainTime">–</span></div>
                     </div>
                     <div class="race-card">
+                        <div class="view-toggle">
+                            <button class="vbtn active" data-view="follow">車に追従</button>
+                            <button class="vbtn" data-view="overview">全体</button>
+                        </div>
                         <canvas id="raceCanvas" width="1000" height="600"></canvas>
                     </div>
                 </div>
@@ -419,26 +437,26 @@
             if (waypoints.length >= 3) {
                 const track = generateTrack();
                 const trackWidth = parseFloat(document.getElementById('trackWidth').value);
-                const { inner, outer } = calculateNormals(track, trackWidth);
 
-                ctx.fillStyle = '#e8e8ed';
-                ctx.beginPath();
-                outer.forEach((p, i) => { const s = worldToScreen(p.x, p.y); i === 0 ? ctx.moveTo(s.x, s.y) : ctx.lineTo(s.x, s.y); });
-                for (let i = inner.length - 1; i >= 0; i--) { const s = worldToScreen(inner[i].x, inner[i].y); ctx.lineTo(s.x, s.y); }
-                ctx.closePath(); ctx.fill();
-
-                ctx.strokeStyle = '#aeaeb2'; ctx.lineWidth = 1.5;
-                [inner, outer].forEach(border => {
+                // 中心線を太線でストローク（衝突判定=中心線からの距離 と一致。鋭角でも縁線が破綻しない）
+                const roadPx = 2 * trackWidth * zoom;
+                ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+                const strokeCenter = (px, color) => {
+                    ctx.strokeStyle = color; ctx.lineWidth = px;
                     ctx.beginPath();
-                    border.forEach((p, i) => { const s = worldToScreen(p.x, p.y); i === 0 ? ctx.moveTo(s.x, s.y) : ctx.lineTo(s.x, s.y); });
+                    track.forEach((p, i) => { const s = worldToScreen(p.x, p.y); i === 0 ? ctx.moveTo(s.x, s.y) : ctx.lineTo(s.x, s.y); });
                     ctx.closePath(); ctx.stroke();
-                });
+                };
+                strokeCenter(roadPx + 4, '#c7c7cc'); // 縁(ケーシング)
+                strokeCenter(roadPx, '#e8e8ed');     // 路面
 
-                if (inner.length > 0 && outer.length > 0) {
-                    ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = 3;
-                    const a = worldToScreen(inner[0].x, inner[0].y), b = worldToScreen(outer[0].x, outer[0].y);
-                    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-                }
+                // ゴールライン（始点の法線方向）
+                const t0 = track[0], tp = track[track.length - 1], tn = track[1];
+                let gnx = -(tn.y - tp.y), gny = (tn.x - tp.x);
+                const gl = Math.hypot(gnx, gny) || 1; gnx = gnx / gl * trackWidth; gny = gny / gl * trackWidth;
+                const ga = worldToScreen(t0.x + gnx, t0.y + gny), gb = worldToScreen(t0.x - gnx, t0.y - gny);
+                ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(ga.x, ga.y); ctx.lineTo(gb.x, gb.y); ctx.stroke();
 
                 const trackLength = track.reduce((sum, p, i) => {
                     if (i === 0) return 0;
@@ -676,6 +694,9 @@
         let fitHistory = [];
         let raceState = null;
 
+        let viewMode = 'follow';   // 'follow' = 車に追従ズーム / 'overview' = 全体
+        let camX = 0, camY = 0, camInit = false;
+
         function makeTransform(points) {
             let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
             for (const p of points) {
@@ -687,7 +708,14 @@
             const s = Math.min((raceCanvas.width - 2 * pad) / w, (raceCanvas.height - 2 * pad) / h);
             const ox = pad + (raceCanvas.width - 2 * pad - w * s) / 2;
             const oy = pad + (raceCanvas.height - 2 * pad - h * s) / 2;
-            return (x, y) => [ox + (x - minx) * s, raceCanvas.height - (oy + (y - miny) * s)];
+            return { toScreen: (x, y) => [ox + (x - minx) * s, raceCanvas.height - (oy + (y - miny) * s)], scale: s };
+        }
+
+        // 追従カメラ：リーダーの現在地を中心に固定ズームで表示する変換
+        function followTransform(cx, cy) {
+            const viewHalf = 80; // 画面に映る半径(m)
+            const s = Math.min(raceCanvas.width, raceCanvas.height) / (2 * viewHalf);
+            return { toScreen: (x, y) => [raceCanvas.width / 2 + (x - cx) * s, raceCanvas.height / 2 - (y - cy) * s], scale: s };
         }
 
         // 代表5台の色（Appleシステムカラー）。1位を先頭に。
@@ -736,40 +764,46 @@
 
         // 代表5台分の走行軌跡をまとめてセット（同じスタートから同時に走らせる）
         function setRaceCars(pointsObj, S, cars) {
-            const toScreen = makeTransform(pointsObj);
-            const trackWidth = parseFloat(document.getElementById('trackWidth').value);
-            const { inner, outer } = calculateNormals(pointsObj, trackWidth);
+            const fit = makeTransform(pointsObj);
             const maxLen = Math.max(...cars.map(c => c.traj.length));
             const step = Math.max(1, Math.floor(maxLen / 300));
             const keep = raceState ? raceState.frame : 0;
-            raceState = { S, cars, toScreen, inner, outer, step, maxLen, frame: keep < maxLen ? keep : 0 };
+            raceState = { S, cars, center: pointsObj, overview: fit, step, maxLen, frame: keep < maxLen ? keep : 0 };
         }
 
         function raceLoop() {
             raceAnim = requestAnimationFrame(raceLoop);
             const st = raceState;
             if (!st) return;
-            const ts = st.toScreen;
+
+            // カメラ（変換）を決定
+            let view = st.overview;
+            const lead = st.cars[0];
+            const leadCur = Math.min(st.frame, lead.traj.length - 1);
+            if (viewMode === 'follow' && lead) {
+                const tx = lead.traj[leadCur][0], ty = lead.traj[leadCur][1];
+                if (!camInit) { camX = tx; camY = ty; camInit = true; }
+                camX += (tx - camX) * 0.12; camY += (ty - camY) * 0.12; // スムーズ追従
+                view = followTransform(camX, camY);
+            }
+            const ts = view.toScreen, scale = view.scale;
 
             rctx.fillStyle = '#0b0b0c';
             rctx.fillRect(0, 0, raceCanvas.width, raceCanvas.height);
 
-            // road
-            rctx.fillStyle = '#3a3a3c';
-            rctx.beginPath();
-            st.outer.forEach((p, i) => { const s = ts(p.x, p.y); i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); });
-            for (let i = st.inner.length - 1; i >= 0; i--) { const s = ts(st.inner[i].x, st.inner[i].y); rctx.lineTo(s[0], s[1]); }
-            rctx.closePath(); rctx.fill();
-
-            // borders
-            rctx.strokeStyle = 'rgba(255,255,255,.85)'; rctx.lineWidth = 1.5;
-            [st.inner, st.outer].forEach(border => {
+            // 路面：中心線を太線でストローク（縁線の自己交差アーティファクトが出ない）
+            const roadPx = 2 * st.S.halfWidth * scale;
+            rctx.lineJoin = 'round'; rctx.lineCap = 'round';
+            const strokeCenter = (px, color) => {
+                rctx.strokeStyle = color; rctx.lineWidth = px;
                 rctx.beginPath();
-                border.forEach((p, i) => { const s = ts(p.x, p.y); i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); });
+                st.center.forEach((p, i) => { const s = ts(p.x, p.y); i === 0 ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); });
                 rctx.closePath(); rctx.stroke();
-            });
+            };
+            strokeCenter(roadPx + Math.max(4, scale * 1.2), 'rgba(255,255,255,.85)'); // 縁(白)
+            strokeCenter(roadPx, '#3a3a3c');                                          // 路面
 
-            // goal line
+            // ゴールライン
             rctx.strokeStyle = '#ff453a'; rctx.lineWidth = 3;
             const a = ts(st.S.goal[0], st.S.goal[1]), b = ts(st.S.goal[2], st.S.goal[3]);
             rctx.beginPath(); rctx.moveTo(a[0], a[1]); rctx.lineTo(b[0], b[1]); rctx.stroke();
@@ -777,24 +811,24 @@
             // 各車を後位→先頭の順で描画（1位が最前面）
             for (let ci = st.cars.length - 1; ci >= 0; ci--) {
                 const car = st.cars[ci];
-                const lead = ci === 0;
+                const isLead = ci === 0;
                 const cur = Math.min(st.frame, car.traj.length - 1);
                 const tail = Math.max(0, cur - st.step * 36);
-                rctx.globalAlpha = lead ? 0.95 : 0.5;
-                rctx.strokeStyle = car.color; rctx.lineWidth = lead ? 3 : 2;
+                rctx.globalAlpha = isLead ? 0.95 : 0.5;
+                rctx.strokeStyle = car.color; rctx.lineWidth = isLead ? 3 : 2;
                 rctx.beginPath();
                 for (let i = tail; i <= cur; i++) { const s = ts(car.traj[i][0], car.traj[i][1]); i === tail ? rctx.moveTo(s[0], s[1]) : rctx.lineTo(s[0], s[1]); }
                 rctx.stroke();
                 rctx.globalAlpha = 1;
                 const t = car.traj[cur];
-                drawCar(ts, t[0], t[1], t[2], car.color, lead);
+                drawCar(ts, t[0], t[1], t[2], car.color, isLead);
             }
 
             drawSpark();
             drawLegend(st.cars.length);
 
             st.frame += st.step;
-            if (st.frame >= st.maxLen) st.frame = 0;
+            if (st.frame >= st.maxLen) { st.frame = 0; camInit = false; }
         }
 
         function drawLegend(n) {
@@ -845,6 +879,7 @@
 
             fitHistory = [];
             raceState = null;
+            camInit = false;
             document.getElementById('trainState').textContent = '計算中…';
             document.getElementById('trainState').classList.remove('win');
             document.getElementById('trainGen').textContent = `0 / ${generations}`;
@@ -876,6 +911,13 @@
             if (worker) worker.postMessage({ type: 'stop' });
             finishTraining('停止しました');
         });
+
+        // 視点切替（車に追従 / 全体）
+        document.querySelectorAll('.vbtn').forEach(btn => btn.addEventListener('click', () => {
+            viewMode = btn.dataset.view;
+            document.querySelectorAll('.vbtn').forEach(b => b.classList.toggle('active', b === btn));
+            camInit = false;
+        }));
 
         // 起動時に実在サーキット(Spa)を適用
         document.getElementById('presetSelect').value = 'spa';
