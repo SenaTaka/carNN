@@ -258,7 +258,7 @@
                             </select>
                         </div>
                         <div class="row"><label for="trackWidth">コース幅 (m)</label>
-                            <input type="number" id="trackWidth" value="7.5" min="3" max="20" step="0.5"></div>
+                            <input type="number" id="trackWidth" value="11" min="3" max="25" step="0.5"></div>
                         <div class="row"><label for="scale">スケール</label>
                             <input type="number" id="scale" value="1.0" min="0.5" max="5" step="0.1"></div>
                         <div class="row"><label for="splinePoints">スプライン解像度</label>
@@ -674,10 +674,14 @@
             panOffset.x = canvas.width / 2 - (minx + maxx) / 2 * zoom;
             panOffset.y = canvas.height / 2 + (miny + maxy) / 2 * zoom;
         }
+        // プリセット別の推奨コース幅(halfWidth)。別区間が干渉しない範囲で広めに。
+        // （干渉解析: Spa 23.4m / Silverstone 16.8m / 鈴鹿は立体交差のみ）
+        const PRESET_WIDTH = { spa: 11, silverstone: 8, suzuka: 10, grandprix: 14, sweeper: 14, oval: 14, speedway: 14, kidney: 14 };
         function applyPreset(name) {
             const wp = PRESETS[name];
             if (!wp) return;
             waypoints = wp.map(p => ({ x: p[0], y: p[1] }));
+            if (PRESET_WIDTH[name]) document.getElementById('trackWidth').value = PRESET_WIDTH[name];
             selectedWaypoint = null; fitView(); updateWaypointList(); draw();
         }
         document.getElementById('presetSelect').addEventListener('change', (e) => applyPreset(e.target.value));
@@ -713,7 +717,7 @@
 
         // 追従カメラ：リーダーの現在地を中心に固定ズームで表示する変換
         function followTransform(cx, cy) {
-            const viewHalf = 80; // 画面に映る半径(m)
+            const viewHalf = 110; // 画面に映る半径(m)。5台の集団が入る程度に広め
             const s = Math.min(raceCanvas.width, raceCanvas.height) / (2 * viewHalf);
             return { toScreen: (x, y) => [raceCanvas.width / 2 + (x - cx) * s, raceCanvas.height / 2 - (y - cy) * s], scale: s };
         }
@@ -721,18 +725,22 @@
         // 代表5台の色（Appleシステムカラー）。1位を先頭に。
         const CAR_COLORS = ['#0a84ff', '#ff9f0a', '#30d158', '#ff375f', '#bf5af2'];
 
-        function drawCar(toScreen, x, y, theta, color, lead) {
-            const l = lead ? 4.6 : 3.6, w = lead ? 2.5 : 2.0;
+        function drawCar(toScreen, x, y, theta, color, lead, rank) {
+            const l = lead ? 6.5 : 5.2, w = lead ? 3.6 : 3.0; // 視認しやすいよう大きめ
             const c = Math.cos(theta), s = Math.sin(theta);
             const corners = [[l, 0], [-l * 0.6, w], [-l * 0.6, -w]].map(([lx, ly]) => toScreen(x + lx * c - ly * s, y + lx * s + ly * c));
-            rctx.globalAlpha = lead ? 1 : 0.9;
+            rctx.globalAlpha = 1;
             rctx.fillStyle = color;
-            rctx.strokeStyle = lead ? '#fff' : 'rgba(255,255,255,.7)';
-            rctx.lineWidth = 1.5;
+            rctx.strokeStyle = '#fff'; rctx.lineWidth = lead ? 2 : 1.5;
             rctx.beginPath();
             corners.forEach((p, i) => i === 0 ? rctx.moveTo(p[0], p[1]) : rctx.lineTo(p[0], p[1]));
             rctx.closePath(); rctx.fill(); rctx.stroke();
-            rctx.globalAlpha = 1;
+            // ランク番号
+            const cp = toScreen(x, y);
+            rctx.fillStyle = '#fff';
+            rctx.font = `700 ${lead ? 13 : 11}px -apple-system, sans-serif`;
+            rctx.textAlign = 'center'; rctx.textBaseline = 'middle';
+            rctx.fillText(String(rank + 1), cp[0], cp[1]);
         }
 
         function drawSpark() {
@@ -821,7 +829,7 @@
                 rctx.stroke();
                 rctx.globalAlpha = 1;
                 const t = car.traj[cur];
-                drawCar(ts, t[0], t[1], t[2], car.color, isLead);
+                drawCar(ts, t[0], t[1], t[2], car.color, isLead, ci);
             }
 
             drawSpark();

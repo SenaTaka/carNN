@@ -63,28 +63,28 @@ function runGA(cfg) {
     }
     a.fit = undefined; b.fit = undefined;
   }
-  // mutGaussian (mu=0, sigma=0.25, indpb=0.2)
-  function mutate(ind) {
-    for (let i = 0; i < N; i++) if (rnd() < 0.2) ind[i] += C.gaussian(0, 0.25);
+  // mutGaussian。sigma は世代とともに焼きなまし（粗探索→微調整）
+  function mutate(ind, sigma) {
+    for (let i = 0; i < N; i++) if (rnd() < 0.2) ind[i] += C.gaussian(0, sigma);
     ind.fit = undefined;
   }
-  // DEAP varAnd (cxpb=0.6, mutpb=0.15)
-  function varAnd(pop) {
+  // varAnd（cxpb=0.6, mutpb=0.2）。sigma を受け取る
+  function varAnd(pop, sigma) {
     const off = pop.map(cloneFresh);
     for (let i = 1; i < off.length; i += 2) {
       if (rnd() < 0.6) mate(off[i - 1], off[i]);
     }
     for (let i = 0; i < off.length; i++) {
-      if (rnd() < 0.15) mutate(off[i]);
+      if (rnd() < 0.2) mutate(off[i], sigma);
     }
     return off;
   }
-  // selTournament (tournsize=4)
+  // selTournament (tournsize=5)
   function selTournament(pop, k) {
     const sel = [];
     for (let i = 0; i < k; i++) {
       let best = null;
-      for (let t = 0; t < 4; t++) {
+      for (let t = 0; t < 5; t++) {
         const c = pop[Math.floor(rnd() * pop.length)];
         if (best === null || c.fit > best.fit) best = c;
       }
@@ -109,9 +109,13 @@ function runGA(cfg) {
   // --- 進化ループ ---
   for (let gen = 1; gen <= GEN; gen++) {
     if (stopFlag) break;
-    const off = varAnd(pop);
+    // 突然変異の強さを 0.30→0.10 へ焼きなまし
+    const sigma = 0.30 - 0.20 * (gen - 1) / Math.max(1, GEN - 1);
+    const off = varAnd(pop, sigma);
     evaluate(off);
-    pop = selTournament(off.concat(hof), popSize);
+    // エリート保存：上位 ELITE をそのまま次世代へ確実に残す + 残りをトーナメント選択
+    const elites = hof.map(cloneKeepFit);
+    pop = elites.concat(selTournament(off.concat(hof), popSize - elites.length));
     updateHof(pop);
 
     const best = hof[0];

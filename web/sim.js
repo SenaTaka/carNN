@@ -8,13 +8,14 @@
 (function () {
   'use strict';
 
-  // ====== パラメータ（g_save.py と一致）======
-  const NHID = 24;
+  // ====== パラメータ ======
+  const NHID = 32;   // 隠れ層 24→32（表現力アップ）
   const NOUT = 2;
-  const SENSOR_ANGLES = [-1.2, -0.7, -0.3, 0.0, 0.3, 0.7, 1.2];
-  const NSENS = SENSOR_ANGLES.length; // 7
-  const NIN = NSENS + 1;              // 8
-  const N_WEIGHTS = NHID * NIN + NHID + NOUT * NHID + NOUT; // 266
+  // センサーを7→9本に増やし前方の分解能を上げる（左右対称・前方密）
+  const SENSOR_ANGLES = [-1.4, -0.9, -0.5, -0.2, 0.0, 0.2, 0.5, 0.9, 1.4];
+  const NSENS = SENSOR_ANGLES.length; // 9
+  const NIN = NSENS + 1;              // 10 (センサー9 + 速度)
+  const N_WEIGHTS = NHID * NIN + NHID + NOUT * NHID + NOUT;
 
   const SIM_STEPS = 30000;
   const DT = 0.001;
